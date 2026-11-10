@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: polytrack
+    runtime: static
+    staticPublishPath: ./web
+    headers:
+      - path: /*.wasm
+        name: Content-Type
+        value: application/wasm
+      - path: /**/*.wasm
+        name: Content-Type
+        value: application/wasm

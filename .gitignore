@@ -1,0 +1,26 @@
+# Electron runtime shipped with the packaged game
+/PolyTrack
+/chrome-sandbox
+/chrome_crashpad_handler
+/chrome_*.pak
+/*.dat
+/*.pak
+/*.so
+/*.so.*
+/locales/
+/resources/*.asar
+/resources/*.asar.*
+/resources/*.asr
+
+# duplicate extracted copy of the game + Electron leftovers
+/app/
+/snapshot_blob.bin
+/v8_context_snapshot.bin
+/LICENSES.chromium.html
+/index.html
+/manifest.json
+/*.wasm
+
+# scratch
+node_modules/
+*.log
