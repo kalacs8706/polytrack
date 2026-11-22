@@ -14,7 +14,7 @@ services:
 
   # Lite mod: video settings + admin only, own API via polytrack-lite/web/api-origin.js
   - type: web
-    name: polytrack-lite
+    name: pserver2026
     runtime: static
     staticPublishPath: ./polytrack-lite/web
     headers:
