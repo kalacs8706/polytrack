@@ -1,8 +1,22 @@
 services:
+  # Full mod (PolyMod): camera, HUD, replays, cheats, admin, autopilot
   - type: web
     name: polytrack
     runtime: static
     staticPublishPath: ./web
+    headers:
+      - path: /*.wasm
+        name: Content-Type
+        value: application/wasm
+      - path: /**/*.wasm
+        name: Content-Type
+        value: application/wasm
+
+  # Lite mod: video settings + admin only, own API via polytrack-lite/web/api-origin.js
+  - type: web
+    name: polytrack-lite
+    runtime: static
+    staticPublishPath: ./polytrack-lite/web
     headers:
       - path: /*.wasm
         name: Content-Type

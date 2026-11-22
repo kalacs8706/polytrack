@@ -24,3 +24,11 @@
 # scratch
 node_modules/
 *.log
+admin-password.txt
+admin-password-lite.txt
+
+# lite build: only the static site is published, so polytrack-lite/web is tracked;
+# the server source, its duplicate render.yaml and the zip stay local
+/polytrack-lite/server/
+/polytrack-lite/render.yaml
+/polytrack-lite.zip
