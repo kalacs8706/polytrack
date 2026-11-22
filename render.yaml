@@ -1,22 +1,10 @@
+# Render Blueprint for the full PolyMod build.
+# The lite build has its own repo (kalacs8706/pserver) and its own blueprint.
 services:
-  # Full mod (PolyMod): camera, HUD, replays, cheats, admin, autopilot
   - type: web
     name: polytrack
     runtime: static
     staticPublishPath: ./web
-    headers:
-      - path: /*.wasm
-        name: Content-Type
-        value: application/wasm
-      - path: /**/*.wasm
-        name: Content-Type
-        value: application/wasm
-
-  # Lite mod: video settings + admin only, own API via polytrack-lite/web/api-origin.js
-  - type: web
-    name: pserver2026
-    runtime: static
-    staticPublishPath: ./polytrack-lite/web
     headers:
       - path: /*.wasm
         name: Content-Type
