@@ -3,6 +3,7 @@ const keys=Object.create(null);
 const DEFAULTS={left:"KeyJ",right:"KeyL",up:"KeyI",down:"KeyK",menu:"ShiftRight",resetCam:"KeyC"};
 const ACTIONS=[["left","Orbit left"],["right","Orbit right"],["up","Camera up"],["down","Camera down"],["menu","Menu key"],["resetCam","Reset view key"]];
 const STORE="ptCamBindings",GFXKEY="ptGfx",HUDKEY="ptHud",CHEATKEY="ptCheats",PANELKEY="ptPanel";
+const LANGKEY="ptLang";const TOUCH=(function(){try{return("ontouchstart"in window)||(navigator.maxTouchPoints||0)>0||!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches)}catch(e){return!1}})();let lang="de";try{const lv=localStorage.getItem(LANGKEY);if("en"===lv||"de"===lv)lang=lv}catch(e){}
 const bind=Object.assign({},DEFAULTS);
 try{const saved=JSON.parse(localStorage.getItem(STORE)||"null");if(saved&&"object"==typeof saved)for(const k in DEFAULTS)"string"==typeof saved[k]&&saved[k]&&(bind[k]=saved[k])}catch(e){}
 const gfx=Object.assign({scale:1,wireframe:!1,fov:1,dist:1,aa:"game"},(function(){try{const v=JSON.parse(localStorage.getItem(GFXKEY)||"null");return v&&"object"==typeof v?v:{}}catch(e){return{}}})());
@@ -40,22 +41,26 @@ function listHistory(){const out=[];try{for(const k of Object.keys(localStorage)
 function pruneHistory(){try{const all=listHistory();if(all.length<=160)return;all.sort(((a,b)=>a.at-b.at));for(let i=0;i<all.length-160;i++)try{localStorage.removeItem(all[i].key)}catch(e){}}catch(e){}}
 function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)return;const old=localStorage.getItem(key);if(!old||old===val)return;let o=null;try{o=JSON.parse(old)}catch(e){return}if(!o||"string"!=typeof o.recording||!o.recording||"number"!=typeof o.frames)return;const id=m[4].toLowerCase(),at=Date.now();localStorage.setItem(HISTKEY+m[2]+"_"+m[3]+"_"+id+"_"+o.frames+"_"+at,JSON.stringify({slot:Number(m[2]),kind:m[3],prefix:m[1],id:id,frames:o.frames,recording:o.recording,at:at}));pruneHistory()}catch(e){}}
 (function(){try{const SP=Storage.prototype;if(SP.__ptRecHooked)return;SP.__ptRecHooked=1;const si=SP.setItem,gi=SP.getItem;SP.setItem=function(k,v){try{"string"==typeof k&&archiveRecord(k,v)}catch(e){}return si.call(this,k,v)};SP.getItem=function(k){const v=gi.call(this,k);try{if("string"==typeof k){const m=RECORD_RE.exec(k);if(m)setCurTrack(m[4])}}catch(e){}return v}}catch(e){}})();
-(function(){try{const byUrl={};for(const id in OFFICIAL)byUrl[OFFICIAL[id].url]=id;const mark=u=>{try{const s=String(u).split("?")[0].split("#")[0];if(byUrl[s])return setCurTrack(byUrl[s]);const m=/tracks\/[^?#]*?([0-9a-f]{64})\.track/i.exec(s);if(m)setCurTrack(m[1])}catch(e){}};const f=window.fetch;if(f&&!f.__ptHooked){const wf=function(i){try{mark("string"==typeof i?i:i&&i.url)}catch(e){}return f.apply(this,arguments)};wf.__ptHooked=1,window.fetch=wf}const op=XMLHttpRequest.prototype.open;if(op&&!op.__ptHooked){const wo=function(m,u){try{mark(u)}catch(e){}return op.apply(this,arguments)};wo.__ptHooked=1,XMLHttpRequest.prototype.open=wo}}catch(e){}})();
+(function(){try{const byUrl={};for(const id in OFFICIAL)byUrl[OFFICIAL[id].url]=id;const mark=u=>{try{const raw=String(u),tq=/[?&]trackId=([0-9a-f]{64})/i.exec(raw);if(tq)return setCurTrack(tq[1]);const s=raw.split("?")[0].split("#")[0];if(byUrl[s])return setCurTrack(byUrl[s]);const m=/tracks\/[^?#]*?([0-9a-f]{64})\.track/i.exec(s);if(m)setCurTrack(m[1])}catch(e){}};const f=window.fetch;if(f&&!f.__ptHooked){const wf=function(i){try{mark("string"==typeof i?i:i&&i.url)}catch(e){}return f.apply(this,arguments)};wf.__ptHooked=1,window.fetch=wf}const op=XMLHttpRequest.prototype.open;if(op&&!op.__ptHooked){const wo=function(m,u){try{mark(u)}catch(e){}return op.apply(this,arguments)};wo.__ptHooked=1,XMLHttpRequest.prototype.open=wo}}catch(e){}})();
 window.__ptCamPatch="PolyMod UI + IJKL orbit + HUD/gfx/debug/AA + drag/resize";
 function saveCheat(){persist(CHEATKEY,cheat)}
 function syncCheat(){try{const w=window.__ptSimWorker;if(w)w.postMessage({ptCheat:cheatState()})}catch(e){}}
 (function(){try{const P=Worker.prototype;if(P.__ptCheatHooked)return;const post=P.postMessage;
-P.postMessage=function(m,t){try{if(m&&"object"==typeof m&&!ArrayBuffer.isView(m)){window.__ptSimWorker=this;const c={};for(const k in m)c[k]=m[k];c.ptCheat=cheatState();m=c,window.__ptLastWorkerMsg=c}}catch(e){}return void 0===t?post.call(this,m):post.call(this,m,t)};
-const addL=P.addEventListener;P.addEventListener=function(t,f,o){try{if("message"===t&&!this.__ptTapped){this.__ptTapped=1;addL.call(this,"message",function(ev){try{const d=ev&&ev.data;if(d&&d.ptCheatAck)window.__ptAckStats=d.ptCheatAck;if(d&&d.ptCtl){window.__ptCtlQ.push(d.ptCtl)}if(d&&d.ptStallTrace){window.__ptStallTrace=d.ptStallTrace;try{localStorage.setItem("ptStallTrace",JSON.stringify(d.ptStallTrace))}catch(e){};console.warn("[pt stall] frame "+d.ptStallTrace.at[0]+" at "+d.ptStallTrace.at[1]+" km/h")}}catch(e){}})}}catch(e){}return addL.call(this,t,f,o)};
+P.postMessage=function(m,t){try{if(m&&"object"==typeof m&&!ArrayBuffer.isView(m)){window.__ptSimWorker=this,window.__ptRawPost=post;const c={};for(const k in m)c[k]=m[k];c.ptCheat=cheatState();if(window.__ptAutoRecPending){c.ptAutoRec=window.__ptAutoRecPending;window.__ptAutoRecPending=null}m=c,window.__ptLastWorkerMsg=c}}catch(e){}return void 0===t?post.call(this,m):post.call(this,m,t)};
+const addL=P.addEventListener;P.addEventListener=function(t,f,o){try{if("message"===t&&!this.__ptTapped){this.__ptTapped=1;addL.call(this,"message",function(ev){try{const d=ev&&ev.data;if(d&&d.ptCheatAck)window.__ptAckStats=d.ptCheatAck;if(d&&d.ptCtl){window.__ptCtlQ.push(d.ptCtl)}if(d&&"ptAutoReady" in d){try{window.__ptAutoReady&&window.__ptAutoReady(!!d.ptAutoReady)}catch(e){}}if(d&&d.ptStallTrace){window.__ptStallTrace=d.ptStallTrace;try{localStorage.setItem("ptStallTrace",JSON.stringify(d.ptStallTrace))}catch(e){};console.warn("[pt stall] frame "+d.ptStallTrace.at[0]+" at "+d.ptStallTrace.at[1]+" km/h")}}catch(e){}})}}catch(e){}return addL.call(this,t,f,o)};
 P.__ptCheatHooked=!0}catch(e){}})();
 const persist=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const save=()=>persist(STORE,bind),saveGfx=()=>persist(GFXKEY,gfx),saveHud=()=>persist(HUDKEY,hud);
 const typing=()=>{const a=document.activeElement;return!!a&&("INPUT"===a.tagName||"TEXTAREA"===a.tagName||a.isContentEditable)};
 const NAMES={ArrowUp:"\u2191",ArrowDown:"\u2193",ArrowLeft:"\u2190",ArrowRight:"\u2192",Space:"Space",ShiftLeft:"LShift",ShiftRight:"RShift",ControlLeft:"LCtrl",ControlRight:"RCtrl",AltLeft:"LAlt",AltRight:"RAlt",Tab:"Tab",Enter:"Enter",Backspace:"Backspace",Minus:"-",Equal:"=",Comma:",",Period:".",Slash:"/",Semicolon:";",Quote:"'",BracketLeft:"[",BracketRight:"]",Backquote:"`",Backslash:"\\",Escape:"Esc"};
 const keyLabel=c=>NAMES[c]||("Key"===c.slice(0,3)?c.slice(3):"Digit"===c.slice(0,5)?c.slice(5):"Numpad"===c.slice(0,6)?"Num "+c.slice(6):c);
+const DE={"Camera":"Kamera","Replays":"Wiederholungen","Graphics":"Grafik","Cheats":"Cheats","Help":"Hilfe","Orbit left":"Nach links drehen","Orbit right":"Nach rechts drehen","Orbit up":"Nach oben drehen","Orbit down":"Nach unten drehen","Camera up":"Kamera hoch","Camera down":"Kamera runter","Menu key":"Men\u00fctaste","Reset view key":"Taste Ansicht zur\u00fccksetzen","Reset camera":"Kamera zur\u00fccksetzen","Restore default keys":"Standardtasten wiederherstellen","Click, then press a key":"Anklicken, dann Taste dr\u00fccken","This track":"Diese Strecke","All tracks":"Alle Strecken","Refresh":"Aktualisieren","Loading\u2026":"Wird geladen\u2026","Show only the track you are on":"Nur die aktuelle Strecke zeigen","Replay this run":"Diese Fahrt abspielen","No replays stored for this track yet.":"F\u00fcr diese Strecke sind noch keine Wiederholungen gespeichert.","No stored replays yet.":"Noch keine Wiederholungen gespeichert."," replay":" Wiederholung"," replays":" Wiederholungen"," older run":" \u00e4ltere Fahrt","Loading track\u2026":"Strecke wird geladen\u2026","Replay started":"Wiederholung gestartet","Replay failed (hook error)":"Wiedergabe fehlgeschlagen (Hook-Fehler)","Replay failed: ":"Wiedergabe fehlgeschlagen: ","Replays re-simulate the recorded controls with the physics the game is running now, so a run recorded at a different Car speed (or before a speed change) will not reproduce exactly \u2014 re-record it with the setting you want to watch. The race clock and finish line use that same physics.":"Wiederholungen simulieren die aufgezeichneten Eingaben mit der aktuellen Physik. Eine Fahrt, die mit anderer Autogeschwindigkeit (oder vor einer \u00c4nderung) aufgenommen wurde, l\u00e4uft daher nicht exakt gleich ab \u2014 nimm sie mit der gew\u00fcnschten Einstellung neu auf. Rennuhr und Ziellinie nutzen dieselbe Physik.","Progress bar (top)":"Fortschrittsbalken (oben)","Pressed keys overlay":"Anzeige gedr\u00fcckter Tasten","Progress uses the game's checkpoint counter; it hides outside a race.":"Der Fortschritt nutzt den Checkpoint-Z\u00e4hler des Spiels und wird au\u00dferhalb eines Rennens ausgeblendet.","On":"An","Off":"Aus","Antialiasing":"Kantengl\u00e4ttung","Game":"Spiel","Wireframe":"Drahtgitter","Render scale":"Render-Skalierung","Camera distance":"Kameraabstand","Reapply":"Erneut anwenden","game setting":"Spieleinstellung","on (forced)":"an (erzwungen)","no renderer yet":"noch kein Renderer"," draws":" Draws","Car speed":"Autogeschwindigkeit","Car grip":"Grip","Reset to defaults":"Auf Standard zur\u00fccksetzen","Waiting for live telemetry...":"Warte auf Live-Telemetrie\u2026","Car pos":"Autoposition","Yaw / pitch":"Gier / Neigung","Pixel ratio":"Pixelverh\u00e4ltnis","Inputs":"Eingaben","Stall trace":"Stall-Trace","Draw calls":"Draw-Calls","Triangles":"Dreiecke","Copy diagnostics":"Diagnose kopieren","Copied":"Kopiert","Copy failed (console)":"Kopieren fehlgeschlagen (Konsole)"," held":" gehalten","none":"keine","Press a key\u2026":"Taste dr\u00fccken\u2026","Close (Right Shift)":"Schlie\u00dfen (Rechts-Shift)","Drag to resize":"Zum Gr\u00f6\u00dfen\u00e4ndern ziehen","Open PolyMod":"PolyMod \u00f6ffnen","Getting started":"Erste Schritte","Tabs":"Tabs","Before you race":"Vor dem Rennen","PolyMod is a local overlay: nothing is uploaded, every setting is stored in this game's local storage, and replays are listed for the profile slot that is active.":"PolyMod ist ein lokales Overlay: Es wird nichts hochgeladen, alle Einstellungen liegen im lokalen Speicher des Spiels, und Wiederholungen werden f\u00fcr den aktiven Profilplatz aufgelistet.","Camera \u2014 orbit with IJKL or the arrow pad, and click any key button to rebind it, including the menu key and the view-reset key. Reset camera clears the orbit offset.":"Kamera \u2014 mit IJKL oder dem Pfeilkreuz umkreisen; jede Tastenschaltfl\u00e4che l\u00e4sst sich neu belegen, auch Men\u00fctaste und Ansichtstaste. Kamera zur\u00fccksetzen l\u00f6scht den Versatz.","Replays \u2014 the runs stored for your profile. \u25b6 loads that run's track and plays it back in game.":"Wiederholungen \u2014 die gespeicherten Fahrten deines Profils. \u25b6 l\u00e4dt die Strecke der Fahrt und spielt sie im Spiel ab.","HUD \u2014 a progress bar driven by the game's checkpoint counter, and a pressed-keys overlay.":"HUD \u2014 ein Fortschrittsbalken aus dem Checkpoint-Z\u00e4hler des Spiels und eine Anzeige der gedr\u00fcckten Tasten.","Graphics \u2014 antialiasing, wireframe, render scale, FOV and camera distance. All of it applies live; Reapply is there after a resolution change.":"Grafik \u2014 Kantengl\u00e4ttung, Drahtgitter, Render-Skalierung, FOV und Kameraabstand. Alles wirkt sofort; Erneut anwenden hilft nach einem Aufl\u00f6sungswechsel.","Cheats \u2014 car speed and grip. Reset to defaults returns to 1\u00d7 speed and 1\u00d7 grip.":"Cheats \u2014 Autogeschwindigkeit und Grip. Auf Standard zur\u00fccksetzen stellt 1\u00d7 Tempo und 1\u00d7 Grip wieder her.","Debug \u2014 FPS, frame time, draw calls, car position, and Copy diagnostics for bug reports.":"Debug \u2014 FPS, Framezeit, Draw-Calls, Autoposition und Diagnose kopieren f\u00fcr Fehlerberichte.","Game follows PolyTrack's own Antialiasing setting, so the in-game toggle keeps working. Off and MSAA override the WebGL context and only take effect after restarting the game. SSAA 1.5\u00d7 and 2\u00d7 render larger and downsample, which is instant and can be combined with MSAA. On a weak GPU use SSAA 1.5\u00d7, or leave the render scale near 1.00.":"Spiel folgt der Kantengl\u00e4ttung von PolyTrack, der Schalter im Spiel bleibt also wirksam. Aus und MSAA \u00fcberschreiben den WebGL-Kontext und greifen erst nach einem Neustart. SSAA 1,5\u00d7 und 2\u00d7 rendern gr\u00f6\u00dfer und rechnen herunter \u2014 sofort wirksam und mit MSAA kombinierbar. Auf schwacher GPU: SSAA 1,5\u00d7 oder Render-Skalierung nahe 1,00.","Cheated runs will not verify. Leaderboard submissions replay your inputs, so a run made with speed or grip changes gets rejected. Use the Cheats tab for practice and reset it before a real attempt.":"Geschummelte Fahrten werden nicht verifiziert. Ranglisten-Uploads spielen deine Eingaben nach, daher wird eine Fahrt mit ge\u00e4ndertem Tempo oder Grip abgelehnt. Nutze die Cheats zum \u00dcben und setze sie vor einem echten Versuch zur\u00fcck.","Back up your profile before testing anything new. PolyMod stores its settings under ptCamBindings, ptGfx, ptHud, ptCheats, ptPanel and ptSeenHelp.":"Sichere dein Profil, bevor du etwas Neues testest. PolyMod speichert seine Einstellungen unter ptCamBindings, ptGfx, ptHud, ptCheats, ptPanel und ptSeenHelp.","Game keeps PolyTrack's own Antialiasing setting. Off and MSAA change the WebGL context, so they take effect after a restart. SSAA renders at a higher resolution and downsamples immediately; it stacks with MSAA.":"Spiel beh\u00e4lt die Kantengl\u00e4ttung von PolyTrack. Aus und MSAA \u00e4ndern den WebGL-Kontext und greifen nach einem Neustart. SSAA rendert in h\u00f6herer Aufl\u00f6sung und rechnet sofort herunter; l\u00e4sst sich mit MSAA kombinieren.","Ghost cars replay a recorded run frame by frame, so a ghost already moves at whatever speed that run was driven at. No extra multiplier is applied, and a run recorded at 2\u00d7 looks 2\u00d7 fast.":"Geister fahren eine aufgezeichnete Fahrt Bild f\u00fcr Bild ab, bewegen sich also schon mit dem Tempo der Aufnahme. Es wird kein zus\u00e4tzlicher Faktor angewendet; eine mit 2\u00d7 aufgenommene Fahrt wirkt doppelt so schnell.","Car speed raises the engine force inside the physics module, so acceleration and top speed scale while the race clock, checkpoints and every other car keep real timing. PolyTrack builds the physics module once at launch, so a new speed takes effect the next time you start the game. The engine force applies to every car simulated in that module, so rivals get it too. Grip above 1 makes the car resist sliding, below 1 lets it drift wide. Ghost cars replay a recorded run, so no extra multiplier is applied to them. Active while driving, not during replay playback.":"Autogeschwindigkeit erh\u00f6ht die Motorkraft im Physikmodul, Beschleunigung und Spitzentempo skalieren, w\u00e4hrend Rennuhr, Checkpoints und alle anderen Autos echte Zeit behalten. PolyTrack baut das Physikmodul beim Start einmal auf, ein neues Tempo greift also beim n\u00e4chsten Spielstart. Die Motorkraft gilt f\u00fcr jedes Auto in diesem Modul, also auch f\u00fcr Gegner. Grip \u00fcber 1 macht das Auto rutschfester, unter 1 driftet es weiter. Geister fahren eine Aufnahme ab und erhalten keinen zus\u00e4tzlichen Faktor. Wirkt beim Fahren, nicht bei der Wiedergabe."};
+const tr=s=>"de"===lang?(DE[s]??s):s;
+const trackLabel=id=>TRACK_NAMES[id]||("de"===lang?"Strecke ":"Track ")+String(id).slice(0,8);
+function localizeTitles(root){if(!root)return;for(const n of root.querySelectorAll("[title]")){const s=n.getAttribute("title");const g=tr(s);if(g!==s)n.title=g}}
 const fmtTime=frames=>{const ms=Math.max(0,Math.round(frames)),m=Math.floor(ms/6e4),s=Math.floor(ms%6e4/1e3),r=ms%1e3;return m+":"+String(s).padStart(2,"0")+"."+String(r).padStart(3,"0")};
 const fmtSize=n=>n<1024?n+" B":Math.round(n/1024)+" KB";
-const profileName=(prefix,slot)=>{try{const u=JSON.parse(localStorage.getItem(prefix+"user_"+slot)||"null");if(u&&"object"==typeof u&&"string"==typeof u.nickname&&u.nickname)return u.nickname}catch(e){}return "Profile "+(slot+1)};
+const profileName=(prefix,slot)=>{try{const u=JSON.parse(localStorage.getItem(prefix+"user_"+slot)||"null");if(u&&"object"==typeof u&&"string"==typeof u.nickname&&u.nickname)return u.nickname}catch(e){}return("de"===lang?"Profil ":"Profile ")+(slot+1)};
 
 /* ---------- input ---------- */
 window.addEventListener("keydown",(function(e){
@@ -122,8 +127,9 @@ const lastCar={x:0,y:0,z:0,t:0,prevX:0,prevY:0,prevZ:0,prevT:0,speed:0};
 /* ---------- HUD overlays ---------- */
 let barEl=null,barFill=null,barText=null,keysEl=null,cheatStatEl=null,cheatStatAt=0;
 function updateCheatStat(){if(!cheatStatEl)return;const t=performance.now();if(t-cheatStatAt<250)return;cheatStatAt=t;const s=window.__ptAckStats;
-if(!s){cheatStatEl.textContent="Waiting for live telemetry...";return}
-cheatStatEl.textContent="Live: "+(s.frames?((s.factor>1?"physics "+s.factor.toFixed(2)+"\u00d7":"stock engine")+", "+s.grip+" grip fixes"):"no car detected")+(s.kmh?" \u00b7 "+s.kmh+" km/h":"")}
+if(!s){cheatStatEl.textContent=tr("Waiting for live telemetry...");return}
+if("de"===lang)cheatStatEl.textContent="Live: "+(s.frames?((s.factor>1?"Physik "+s.factor.toFixed(2)+"\u00d7":"Serienmotor")+", "+s.grip+" Grip-Korrekturen"):"kein Auto erkannt")+(s.kmh?" \u00b7 "+s.kmh+" km/h":"");
+else cheatStatEl.textContent="Live: "+(s.frames?((s.factor>1?"physics "+s.factor.toFixed(2)+"\u00d7":"stock engine")+", "+s.grip+" grip fixes"):"no car detected")+(s.kmh?" \u00b7 "+s.kmh+" km/h":"")}
 function buildHud(){
 if(!barEl){
 barEl=el("div");barEl.id="pt-progress";
@@ -174,12 +180,14 @@ requestAnimationFrame(loop);
 }
 
 /* ---------- helpers ---------- */
-function el(tag,cls,text){const d=document.createElement(tag);cls&&(d.className=cls),null!=text&&(d.textContent=text);return d}
-function applyOpen(){panel&&(panel.style.display=open?"":"none",open&&applyLayout())}
-function syncCamHint(){if(!camHintEl)return;camHintEl.textContent="Hold the arrows above or IJKL to orbit. Press "+keyLabel(bind.menu)+" to open or close PolyMod; "+keyLabel(bind.resetCam)+" recentres the view."}
-function render(){if(!panel)return;for(const b of panel.querySelectorAll("[data-act]")){const a=b.dataset.act;b.textContent=capture===a?"Press a key\u2026":keyLabel(bind[a]);b.classList.toggle("capturing",capture===a)}syncCamHint()}
-function showTab(name){for(const t of tabs){const on=t.name===name;t.btn.classList.toggle("active",on),t.pane.style.display=on?"":"none",on&&(t.built||(t.build(t.pane),t.built=!0),tabHooks[name]&&tabHooks[name]())}}
-function addTab(name,build){const btn=el("button","pt-tab",name);btn.type="button",btn.addEventListener("click",(e=>{e.preventDefault(),showTab(name)}));tabBar.appendChild(btn);const pane=el("div","pt-pane");pane.style.display="none",panelBody.appendChild(pane),tabs.push({name:name,btn:btn,pane:pane,build:build,built:!1})}
+function el(tag,cls,text){const d=document.createElement(tag);cls&&(d.className=cls),null!=text&&(d.textContent=tr(text));return d}
+let langBtn=null,currentTab=null,fabEl=null;
+function setLang(l){lang="en"===l?"en":"de";try{localStorage.setItem(LANGKEY,lang)}catch(e){}langBtn&&(langBtn.textContent="de"===lang?"DE":"EN");localizeTitles(panel);for(const t of tabs){t.btn.textContent=tr(t.name),t.built=!1,t.pane.textContent=""}showTab(currentTab||"Camera");syncCamHint()}
+function applyOpen(){panel&&(panel.style.display=open?"":"none",open&&applyLayout()),fabEl&&(fabEl.style.display=open?"none":"")}
+function syncCamHint(){if(!camHintEl)return;camHintEl.textContent="de"===lang?"Halte die Pfeile oben oder IJKL gedr\u00fcckt, um zu umkreisen. Dr\u00fccke "+keyLabel(bind.menu)+", um PolyMod zu \u00f6ffnen oder zu schlie\u00dfen; "+keyLabel(bind.resetCam)+" zentriert die Ansicht.":"Hold the arrows above or IJKL to orbit. Press "+keyLabel(bind.menu)+" to open or close PolyMod; "+keyLabel(bind.resetCam)+" recentres the view."}
+function render(){if(!panel)return;for(const b of panel.querySelectorAll("[data-act]")){const a=b.dataset.act;b.textContent=capture===a?tr("Press a key\u2026"):keyLabel(bind[a]);b.classList.toggle("capturing",capture===a)}syncCamHint()}
+function showTab(name){currentTab=name;for(const t of tabs){const on=t.name===name;t.btn.classList.toggle("active",on),t.pane.style.display=on?"":"none",on&&(t.built||(t.build(t.pane),t.built=!0,localizeTitles(t.pane)),tabHooks[name]&&tabHooks[name]())}}
+function addTab(name,build){const btn=el("button","pt-tab",name);btn.type="button",btn.dataset.tab=name,btn.addEventListener("click",(e=>{e.preventDefault(),showTab(name)}));tabBar.appendChild(btn);const pane=el("div","pt-pane");pane.style.display="none",panelBody.appendChild(pane),tabs.push({name:name,btn:btn,pane:pane,build:build,built:!1})}
 
 /* ---------- Camera tab ---------- */
 function buildCameraTab(pane){
@@ -214,10 +222,10 @@ let v=null;try{v=JSON.parse(localStorage.getItem(key)||"null")}catch(e){}
 const frames=v&&"number"==typeof v.frames&&isFinite(v.frames)?v.frames:null;
 const recording=v&&"string"==typeof v.recording?v.recording:"";
 const id=m[4].toLowerCase();
-items.push({name:TRACK_NAMES[id]||"Track "+id.slice(0,8),slot:Number(m[2]),kind:m[3],prefix:m[1],frames:frames,size:recording.length,recording:recording,id:id,best:!0,at:0})}}catch(e){}
+items.push({name:trackLabel(id),slot:Number(m[2]),kind:m[3],prefix:m[1],frames:frames,size:recording.length,recording:recording,id:id,best:!0,at:0})}}catch(e){}
 for(const h of listHistory()){
 if(null!==cur&&h.slot!==cur)continue;
-items.push({name:TRACK_NAMES[h.id]||"Track "+h.id.slice(0,8),slot:h.slot,kind:h.kind,prefix:h.prefix,frames:h.frames,size:h.recording.length,recording:h.recording,id:h.id,best:!1,at:h.at})}
+items.push({name:trackLabel(h.id),slot:h.slot,kind:h.kind,prefix:h.prefix,frames:h.frames,size:h.recording.length,recording:h.recording,id:h.id,best:!1,at:h.at})}
 items.sort((a,b)=>a.name===b.name?((null==a.frames?1e15:a.frames)-(null==b.frames?1e15:b.frames)||(a.best===b.best?0:a.best?-1:1)):(a.name<b.name?-1:1));
 return items}
 function buildReplaysTab(pane){
@@ -232,9 +240,9 @@ const setStatus=t=>{replayStatus.textContent=t||"";replayStatus.classList.toggle
 const paint=()=>{
 const all=listRecords(),cur=activeSlot(),curId=curTrack.id;
 const items=trackFilter.on&&curId?all.filter((it=>it.id===curId)):all;
-const tname=curId?TRACK_NAMES[curId]||"Track "+curId.slice(0,8):null;
-filt.textContent=trackFilter.on?"This track":"All tracks",filt.classList.toggle("active",trackFilter.on);
-count.textContent=items.length+(1===items.length?" replay":" replays")+(null!==cur?" \u00b7 "+profileName("polytrack_v5_prod_",cur):"")+(trackFilter.on&&tname?" \u00b7 "+tname:"");
+const tname=curId?trackLabel(curId):null;
+filt.textContent=trackFilter.on?tr("This track"):tr("All tracks"),filt.classList.toggle("active",trackFilter.on);
+count.textContent=items.length+(1===items.length?tr(" replay"):tr(" replays"))+(null!==cur?" \u00b7 "+profileName("polytrack_v5_prod_",cur):"")+(trackFilter.on&&tname?" \u00b7 "+tname:"");
 list.textContent="";
 if(!items.length){list.appendChild(el("div","pt-empty",trackFilter.on&&curId?"No replays stored for this track yet.":"No stored replays yet."));return}
 for(const it of items){
@@ -245,7 +253,7 @@ const play=el("button","pt-play","\u25b6");play.type="button";play.title="Replay
 play.addEventListener("click",(e=>{e.preventDefault(),e.stopPropagation(),startReplay(it,setStatus)}));
 top.appendChild(play);
 row.appendChild(top);
-row.appendChild(el("div","pt-rmeta",profileName(it.prefix,it.slot)+" \u00b7 "+it.kind+" \u00b7 "+fmtSize(it.size)+(it.best?"":" \u00b7 older run")));
+row.appendChild(el("div","pt-rmeta",profileName(it.prefix,it.slot)+" \u00b7 "+it.kind+" \u00b7 "+fmtSize(it.size)+(it.best?"":tr(" older run"))));
 row.title=it.name+"\n"+it.id;
 list.appendChild(row)} };
 const draw=()=>{drawBusy++;try{paint()}catch(e){}finally{drawBusy--}curTrack.pending&&(curTrack.pending=0,setTimeout(draw,0))};
@@ -255,7 +263,7 @@ filt.addEventListener("click",(e=>{e.preventDefault(),trackFilter.on=!trackFilte
 draw()}
 
 async function startReplay(it,setStatus){
-setStatus("Loading track\u2026");
+setStatus(tr("Loading track\u2026"));
 try{
 if(typeof window.__ptStartReplay!=="function")throw new Error("replay hook missing");
 let text=null,category="official";
@@ -275,8 +283,8 @@ const rec=n(1754).A.deserialize(it.recording);
 if(!rec)throw new Error("invalid recording data");
 open=!1,applyOpen();
 const ok=window.__ptStartReplay(parsed.trackMetadata,parsed.trackData,category,it.slot,rec,it.frames||0);
-setStatus(ok?"Replay started":"Replay failed (hook error)");
-}catch(e){console.warn("pt replay:",e),setStatus("Replay failed: "+e.message)}
+setStatus(ok?tr("Replay started"):tr("Replay failed (hook error)"));
+}catch(e){console.warn("pt replay:",e),setStatus(tr("Replay failed: ")+e.message)}
 }
 
 /* ---------- HUD tab ---------- */
@@ -295,30 +303,39 @@ pane.appendChild(el("div","pt-hint","Progress uses the game's checkpoint counter
 const sliderRefs={};
 function sliderRow(pane,label,min,max,step,get,set){
 const row=el("div","pt-row"),wrap=el("div","pt-sliderwrap");
-const range=el("input");range.type="range",range.min=String(min),range.max=String(max),range.step=String(step),range.value=String(get());
-const val=el("span","pt-val",String(get()));
-sliderRefs[label]=range;
-range.addEventListener("input",(()=>{const v=Number(range.value);set(v),val.textContent=v.toFixed(step<1?2:0),saveGfx(),"Render scale"===label&&(gfx.aa=aaPick(),aaSync())}));
-wrap.appendChild(range),wrap.appendChild(val);
+const track=el("div","pt-slide"),fill=el("div","pt-slide-fill"),knob=el("div","pt-slide-knob");
+track.appendChild(fill),track.appendChild(knob);
+const val=el("span","pt-val",""),dec=step<1?2:0;
+const paint=v=>{const n=Math.max(min,Math.min(max,void 0===v?Number(get()):Number(v))),f=(n-min)/(max-min);knob.style.left=(f*100)+"%",fill.style.width=(f*100)+"%",val.textContent=n.toFixed(dec)};
+const commit=cx=>{const r=track.getBoundingClientRect();if(!r.width)return;const f=Math.max(0,Math.min(1,(cx-r.left)/r.width));let v=min+f*(max-min);v=Math.max(min,Math.min(max,Math.round(v/step)*step)),v=+v.toFixed(4);set(v),paint(v),saveGfx(),"Render scale"===label&&(gfx.aa=aaPick(),aaSync())};
+let pid=null;
+track.addEventListener("pointerdown",(e=>{e.preventDefault(),e.stopPropagation(),pid=e.pointerId;try{track.setPointerCapture(pid)}catch(err){}commit(e.clientX)})),
+track.addEventListener("pointermove",(e=>{if(null===pid||e.pointerId!==pid)return;e.preventDefault(),e.stopPropagation(),commit(e.clientX)})),
+track.addEventListener("pointerup",(e=>{if(null===pid)return;try{track.releasePointerCapture(pid)}catch(err){}pid=null})),
+track.addEventListener("pointercancel",(()=>{if(null===pid)return;try{track.releasePointerCapture(pid)}catch(err){}pid=null}));
+track.__ptSet=v=>paint(v);
+sliderRefs[label]=track;
+paint();
+wrap.appendChild(track),wrap.appendChild(val);
 row.appendChild(el("span","pt-label",label)),row.appendChild(wrap),pane.appendChild(row)}
 const AAMODES=[["game","Game"],["off","Off"],["msaa","MSAA"],["ssaa15","SSAA 1.5\u00d7"],["ssaa2","SSAA 2\u00d7"]];
 let aaStatusEl=null,aaButtons=null;
 function aaPick(){const s=+gfx.scale||1;if("off"===gfx.aa||"msaa"===gfx.aa||"game"===gfx.aa)return gfx.aa;return s>=1.95?"ssaa2":s>=1.4?"ssaa15":"game"}
 function aaSync(){
 if(!aaStatusEl)return;
-const cur=aaPick(),label={game:"game setting",off:"off",msaa:"on (forced)",ssaa15:"SSAA 1.5\u00d7",ssaa2:"SSAA 2\u00d7"};
+const cur=aaPick(),label={game:tr("game setting"),off:tr("Off").toLowerCase(),msaa:tr("on (forced)"),ssaa15:"SSAA 1.5\u00d7",ssaa2:"SSAA 2\u00d7"};
 if(aaButtons)for(const k in aaButtons)aaButtons[k].classList.toggle("active",k===cur);
 let ctx="no renderer yet";
 try{const gl=renderer&&renderer.getContext?renderer.getContext():null;
 if(gl){const a=gl.getContextAttributes?gl.getContextAttributes():null;let n=0;try{n=gl.getParameter(gl.SAMPLES)||0}catch(e){}
 ctx=a&&a.antialias?"context MSAA on"+(n?", "+n+"\u00d7":""):"context MSAA off"}}catch(e){}
-aaStatusEl.textContent="PolyMod: "+(label[cur]||cur)+" \u00b7 "+ctx+" \u00b7 game setting "+(window.__ptGameAA===!1?"off":"on")}
+{const c="de"===lang?ctx.replace("context MSAA on","Kontext-MSAA an").replace("context MSAA off","Kontext-MSAA aus").replace("no renderer yet","noch kein Renderer"):ctx;aaStatusEl.textContent="PolyMod: "+(label[cur]||cur)+" \u00b7 "+c+" \u00b7 "+tr("game setting")+" "+(window.__ptGameAA===!1?tr("Off").toLowerCase():tr("On").toLowerCase())}}
 function setAA(m){
 gfx.aa=m;
 if("ssaa15"===m)gfx.scale=1.5;else if("ssaa2"===m)gfx.scale=2;
 saveGfx();
 try{applyScale(renderer)}catch(e){}
-const sr=sliderRefs["Render scale"];if(sr){sr.value=String(gfx.scale);const v=sr.parentNode&&sr.parentNode.querySelector(".pt-val");v&&(v.textContent=gfx.scale.toFixed(2))}
+const sr=sliderRefs["Render scale"];sr&&sr.__ptSet&&sr.__ptSet(gfx.scale)
 aaSync()}
 function buildGraphicsTab(pane){
 const aarow=el("div","pt-row");aarow.appendChild(el("span","pt-label","Antialiasing"));
@@ -333,7 +350,7 @@ sliderRow(pane,"Render scale",0.5,2,0.05,()=>gfx.scale,(v)=>{gfx.scale=v,applySc
 sliderRow(pane,"FOV",0.6,1.8,0.05,()=>gfx.fov,(v)=>{gfx.fov=v});
 sliderRow(pane,"Camera distance",0.5,3,0.05,()=>gfx.dist,(v)=>{gfx.dist=v});
 const row=el("div","pt-row");const info=el("span","pt-meta","");
-const syncInfo=()=>{info.textContent=renderer?(Math.round(drawCalls)+" draws"):"no renderer yet"};
+const syncInfo=()=>{info.textContent=renderer?(Math.round(drawCalls)+tr(" draws")):tr("no renderer yet")};
 row.appendChild(info);pane.appendChild(row);
 const btn=el("button","pt-wide pt-secondary","Reapply");btn.type="button";
 btn.addEventListener("click",(e=>{e.preventDefault(),applyScale(renderer),setWireframe(gfx.wireframe),syncInfo(),aaSync()}));
@@ -349,8 +366,15 @@ sliderRow(pane,"Car grip",0.25,2,0.05,()=>cheat.grip,(v)=>{cheat.grip=v,saveChea
 pane.appendChild(el("div","pt-hint","Ghost cars replay a recorded run frame by frame, so a ghost already moves at whatever speed that run was driven at. No extra multiplier is applied, and a run recorded at 2\u00d7 looks 2\u00d7 fast."));
 const reset=el("button","pt-wide pt-secondary","Reset to defaults");reset.type="button";
 reset.addEventListener("click",(e=>{e.preventDefault(),cheat.speed=1,cheat.grip=1,cheat.others=!1,saveCheat(),syncCheat();
-for(const w of pane.querySelectorAll(".pt-sliderwrap")){w.querySelector("input").value="1";w.querySelector(".pt-val").textContent="1.00"}}));
+for(const t of pane.querySelectorAll(".pt-slide"))t.__ptSet&&t.__ptSet(1)}));
 pane.appendChild(reset);
+const applyBtn=el("button","pt-wide","Apply");applyBtn.type="button";
+const applyNote=el("div","pt-hint","");
+applyBtn.addEventListener("click",(e=>{e.preventDefault(),saveCheat(),syncCheat(),applyNote.textContent=tr("Applied.")+" "+tr("Grip applies immediately. Car speed sits inside the physics module, which is built when a race starts, so it applies from the next race \u2014 Restart game applies it right now.")}));
+pane.appendChild(applyBtn);pane.appendChild(applyNote);
+const restart=el("button","pt-wide pt-secondary","Restart game");restart.type="button";
+restart.addEventListener("click",(e=>{e.preventDefault(),saveCheat();try{location.reload()}catch(err){}}));
+pane.appendChild(restart);
 pane.appendChild(el("div","pt-hint","Car speed raises the engine force inside the physics module, so acceleration and top speed scale while the race clock, checkpoints and every other car keep real timing. PolyTrack builds the physics module once at launch, so a new speed takes effect the next time you start the game. The engine force applies to every car simulated in that module, so rivals get it too. Grip above 1 makes the car resist sliding, below 1 lets it drift wide. Ghost cars replay a recorded run, so no extra multiplier is applied to them. Active while driving, not during replay playback."));cheatStatEl=el("div","pt-hint","Waiting for live telemetry..."),pane.appendChild(cheatStatEl)
 }
 
@@ -365,7 +389,7 @@ d.tris.textContent=String(triangles);
 d.car.textContent=lastCar.x.toFixed(1)+", "+lastCar.y.toFixed(1)+", "+lastCar.z.toFixed(1);
 d.cam.textContent=Math.round(yaw*57.2958)+"\u00b0 / "+Math.round(pitch*57.2958)+"\u00b0";
 d.res.textContent=renderer&&renderer.getPixelRatio?renderer.getPixelRatio().toFixed(2)+"x":"\u2014";
-d.keys.textContent=Object.keys(keys).filter(k=>keys[k]).length+" held";d.stall.textContent=window.__ptStallTrace?"frame "+window.__ptStallTrace.at[0]+" | "+window.__ptStallTrace.at[1]+" km/h":"none";
+d.keys.textContent=Object.keys(keys).filter(k=>keys[k]).length+tr(" held");d.stall.textContent=window.__ptStallTrace?"frame "+window.__ptStallTrace.at[0]+" | "+window.__ptStallTrace.at[1]+" km/h":tr("none");
 }
 function buildDebugTab(pane){
 debugEls={};
@@ -374,7 +398,7 @@ for(const pair of rows){const row=el("div","pt-row");row.appendChild(el("span","
 const copy=el("button","pt-wide","Copy diagnostics");copy.type="button";
 copy.addEventListener("click",(e=>{e.preventDefault();const data={fps:fps,frameMs:+frameMs.toFixed(2),drawCalls:drawCalls,triangles:triangles,car:{x:lastCar.x,y:lastCar.y,z:lastCar.z},yaw:yaw,pitch:pitch,stall:window.__ptStallTrace||null,ack:window.__ptAckStats||null,rec:window.__ptRecStat||null,pixelRatio:renderer&&renderer.getPixelRatio?renderer.getPixelRatio():null,scale:gfx.scale,fov:gfx.fov,dist:gfx.dist,wireframe:gfx.wireframe,panel:window.__ptCamPatch,ua:navigator.userAgent};
 const text=JSON.stringify(data,null,2);
-try{navigator.clipboard.writeText(text).then((()=>{copy.textContent="Copied"}),(function(){copy.textContent="Copy failed (console)"}))}catch(err){copy.textContent="Copy failed (console)"}
+try{navigator.clipboard.writeText(text).then((()=>{copy.textContent=tr("Copied")}),(function(){copy.textContent=tr("Copy failed (console)")}))}catch(err){copy.textContent=tr("Copy failed (console)")}
 console.log("[pt debug]",text)}));
 pane.appendChild(copy);
 fillDebug();
@@ -386,7 +410,7 @@ function buildHelpTab(pane){
 const head=t=>pane.appendChild(el("div","pt-help-h",t));
 const para=t=>pane.appendChild(el("div","pt-help-p",t));
 head("Getting started");
-para("Press "+keyLabel(bind.menu)+" at any time to open or close PolyMod. It works in menus and while driving, and it starts closed. Drag the title bar to move the window, drag the bottom-right corner to resize it, and rebind both hotkeys under Camera.");
+para("de"===lang?"Dr\u00fccke jederzeit "+keyLabel(bind.menu)+", um PolyMod zu \u00f6ffnen oder zu schlie\u00dfen. Es funktioniert in Men\u00fcs und beim Fahren und startet geschlossen. Ziehe die Titelleiste zum Verschieben und die Ecke unten rechts zum Gr\u00f6\u00dfen\u00e4ndern; beide Tastenk\u00fcrzel lassen sich unter Kamera neu belegen. Auf Touch-Ger\u00e4ten \u00f6ffnet die runde Schaltfl\u00e4che unten rechts das Fenster.":"Press "+keyLabel(bind.menu)+" at any time to open or close PolyMod. It works in menus and while driving, and it starts closed. Drag the title bar to move the window, drag the bottom-right corner to resize it, and rebind both hotkeys under Camera. On touch devices, the round button in the bottom-right corner opens it.");
 para("PolyMod is a local overlay: nothing is uploaded, every setting is stored in this game's local storage, and replays are listed for the profile slot that is active.");
 head("Tabs");
 para("Camera \u2014 orbit with IJKL or the arrow pad, and click any key button to rebind it, including the menu key and the view-reset key. Reset camera clears the orbit offset.");
@@ -401,6 +425,211 @@ head("Before you race");
 para("Cheated runs will not verify. Leaderboard submissions replay your inputs, so a run made with speed or grip changes gets rejected. Use the Cheats tab for practice and reset it before a real attempt.");
 para("Back up your profile before testing anything new. PolyMod stores its settings under ptCamBindings, ptGfx, ptHud, ptCheats, ptPanel and ptSeenHelp.");
 }
+
+/* ---------- cheats: apply, admin, leaderboard cheat badges ---------- */
+const APIBASE=(function(){try{return String(window.__ptMPBase||"").replace(/\/+$/,"")}catch(e){return""}})();
+Object.assign(DE,{"Admin":"Admin","Admin password":"Admin-Passwort","Apply":"Anwenden","Sign out":"Abmelden","Refresh":"Aktualisieren","Delete this record":"Diesen Eintrag l\u00f6schen","Delete all on this track":"Alle Eintr\u00e4ge dieser Strecke l\u00f6schen","Delete every record on this track?":"Wirklich alle Eintr\u00e4ge dieser Strecke l\u00f6schen?","records":"Eintr\u00e4ge","clean":"sauber","Cheated":"Geschummelt","speed":"Tempo","grip":"Grip","Signed in.":"Angemeldet.","Enter the admin password.":"Admin-Passwort eingeben.","No records yet.":"Noch keine Eintr\u00e4ge.","Delete failed: ":"L\u00f6schen fehlgeschlagen: ","Admin request failed: ":"Admin-Anfrage fehlgeschlagen: ","Applied.":"Angewendet.","Restart game":"Spiel neu starten","The admin tools need the self-hosted server (web build only).":"Die Admin-Werkzeuge brauchen den eigenen Server (nur Web-Build).","Grip applies immediately. Car speed sits inside the physics module, which is built when a race starts, so it applies from the next race \u2014 Restart game applies it right now.":"Grip wirkt sofort. Das Tempo steckt im Physikmodul, das beim Rennstart gebaut wird, es greift also ab dem n\u00e4chsten Rennen \u2014 \u201eSpiel neu starten\u201c wendet es sofort an.","Replay this run with the settings it was driven with":"Diese Fahrt mit den damaligen Einstellungen abspielen"});
+Object.assign(DE,{"Autopilot":"Autopilot","Stop":"Stopp","Drive this run with autopilot":"Diese Fahrt mit Autopilot fahren","Autopilot armed \u2014 start the race on this track and the recorded inputs steer your car":"Autopilot bereit \u2014 starte das Rennen auf dieser Strecke, dann steuern die aufgezeichneten Eingaben dein Auto","Recording could not be loaded":"Aufzeichnung konnte nicht geladen werden","Autopilot off":"Autopilot aus"});
+
+// Stamp the settings a run was driven with into its leaderboard submission, so the
+// server (and everyone reading the board) can see it was driven with speed/grip changes.
+(function(){try{const XP=XMLHttpRequest.prototype;if(XP.__ptCheatStamp)return;XP.__ptCheatStamp=1;
+const op=XP.open,se=XP.send;
+XP.open=function(m,u){try{this.__ptUrl=String(u||"");this.__ptMethod=String(m||"GET").toUpperCase()}catch(e){}return op.apply(this,arguments)};
+XP.send=function(b){try{
+if("POST"===this.__ptMethod&&/\/leaderboard(\?|$)/.test(this.__ptUrl||"")&&"string"==typeof b&&-1===b.indexOf("&speed=")){const s=cheatState();b+="&speed="+encodeURIComponent(String(s.speed))+"&grip="+encodeURIComponent(String(s.grip))}
+}catch(e){}return se.call(this,b)};
+}catch(e){}})();
+
+function cheatBadgeText(e){
+const sp=+(e&&e.cheatSpeed)||1,gr=+(e&&e.cheatGrip)||1,parts=[];
+if(sp>1.001)parts.push(sp.toFixed(2)+"\u00d7 "+tr("speed"));
+if(Math.abs(gr-1)>0.001)parts.push(gr.toFixed(2)+" "+tr("grip"));
+return parts.length?tr("Cheated")+": "+parts.join(", "):"";
+}
+
+// Play a leaderboard run the way it was driven: restore its grip, and its car speed when
+// that differs from the value this page's physics module was built with (which needs a
+// reload, so the request is parked in localStorage and resumed afterwards).
+const PENDKEY="ptPendingReplay";
+window.__ptSpeedAtLoad=(function(){try{return +cheat.speed||1}catch(e){return 1}})();
+function replayFromEntry(en){
+if(!en)return;
+const sp=Math.max(1,Math.min(4,+(en.cheatSpeed)||1)),gr=Math.max(0.25,Math.min(2,+(en.cheatGrip)||1));
+cheat.speed=sp;cheat.grip=gr;saveCheat();syncCheat();
+try{localStorage.setItem(PENDKEY,JSON.stringify({trackId:curTrack.id,entryId:en.id,speed:sp,grip:gr,at:Date.now()}))}catch(e){}
+if(Math.abs(sp-(window.__ptSpeedAtLoad||1))>0.001){try{window.location.reload();return}catch(e){}}
+playPendingReplay();
+}
+function playPendingReplay(){
+let p=null;try{p=JSON.parse(localStorage.getItem(PENDKEY)||"null")}catch(e){}
+if(!p||!p.entryId||!p.trackId||Date.now()-(p.at||0)>180000){if(p){try{localStorage.removeItem(PENDKEY)}catch(e){}}return}
+let tries=0;
+const go=async()=>{
+if("function"!=typeof window.__ptStartReplay||!document.getElementById("ui")){if(++tries<12)return setTimeout(go,1500);return}
+try{
+const d=await apiJson("recordings?version=0.6.3&ids="+encodeURIComponent(p.entryId));
+const rec=d&&d[0];
+if(!rec||"string"!=typeof rec.recording)throw new Error("replay not available");
+try{localStorage.removeItem(PENDKEY)}catch(e){}
+cheat.speed=Math.max(1,Math.min(4,+p.speed||1));cheat.grip=Math.max(0.25,Math.min(2,+p.grip||1));saveCheat();syncCheat();
+await startReplay({id:p.trackId,recording:rec.recording,frames:rec.frames||0,slot:activeSlot(),kind:"official",prefix:"polytrack_v5_prod_",name:"",size:rec.frames||0},(function(s){try{console.log("[pt replay]",s)}catch(e){}}));
+}catch(err){console.warn("pt pending replay:",err);try{localStorage.removeItem(PENDKEY)}catch(e){}}
+};
+setTimeout(go,1200);
+}
+
+// Autopilot: arm a leaderboard run in the physics worker, which then feeds that run's
+// recorded controls to your car instead of the keyboard, frame for frame.
+const AUTOKEY="ptPendingAuto";
+function autoChip(name,frames,note){
+let c=document.getElementById("pt-auto");
+if(!c){c=document.createElement("div");c.id="pt-auto";c.style.cssText="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:2147483646;display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:6px;background:rgba(17,32,82,.94);color:#fff;font:13px/1.4 inherit;box-shadow:0 6px 18px rgba(0,0,0,.45);max-width:min(92vw,560px)";document.body.appendChild(c)}
+c.textContent="";
+const t=document.createElement("span");
+t.textContent=note||((tr("Autopilot")+": "+(name||"?")+" \u2014 ")+tr("Autopilot armed \u2014 start the race on this track and the recorded inputs steer your car")+(frames?" ("+fmtTime(frames)+")":""));
+c.appendChild(t);
+const b=document.createElement("button");b.type="button";b.textContent=tr("Stop");
+b.style.cssText="padding:2px 8px;border:0;border-radius:3px;background:rgba(255,255,255,.16);color:#fff;font:inherit;cursor:pointer;white-space:nowrap";
+b.addEventListener("click",(e=>{e.preventDefault();autoOff()}));c.appendChild(b);
+}
+window.__ptAutoReady=function(ok){if(!window.__ptAutoOn)return;const c=document.getElementById("pt-auto");if(c&&ok){const s=c.querySelector("span");s&&(s.textContent=tr("Autopilot")+": "+(s.textContent.split(": ")[1]||""))}};
+function autoOff(){
+window.__ptAutoOn=!1;window.__ptAutoRecPending=null;
+try{localStorage.removeItem(AUTOKEY)}catch(e){}
+try{if(window.__ptSimWorker&&window.__ptRawPost)window.__ptRawPost.call(window.__ptSimWorker,{ptAutoRec:null})}catch(e){}
+const c=document.getElementById("pt-auto");if(c)c.remove();
+}
+async function armAutopilot(en){
+if(!en)return;
+const sp=Math.max(1,Math.min(4,+(en.cheatSpeed)||1)),gr=Math.max(0.25,Math.min(2,+(en.cheatGrip)||1));
+cheat.speed=sp;cheat.grip=gr;saveCheat();syncCheat();
+try{localStorage.setItem(AUTOKEY,JSON.stringify({entryId:en.id,trackId:curTrack.id,speed:sp,grip:gr,name:en.nickname||"",at:Date.now()}))}catch(e){}
+// Car speed is baked into the physics module, so a different value needs the reload;
+// the pending entry survives it and is armed again automatically.
+if(Math.abs(sp-(window.__ptSpeedAtLoad||1))>0.001){try{window.location.reload();return}catch(e){}}
+await armAutopilotEntry(en.id,en.nickname||"");
+}
+async function armAutopilotEntry(entryId,name){
+try{
+const d=await apiJson("recordings?version=0.6.3&ids="+encodeURIComponent(entryId));
+const r=d&&d[0];
+if(!r||"string"!=typeof r.recording)throw new Error("recording not available");
+window.__ptAutoOn=!0;
+if(window.__ptSimWorker&&window.__ptRawPost)window.__ptRawPost.call(window.__ptSimWorker,{ptAutoRec:r.recording});
+else window.__ptAutoRecPending=r.recording;
+autoChip(name,r.frames||0);
+}catch(err){console.warn("pt autopilot:",err);autoChip("",0,tr("Recording could not be loaded"))}
+}
+function resumePendingAuto(){
+let p=null;try{p=JSON.parse(localStorage.getItem(AUTOKEY)||"null")}catch(e){}
+if(!p||!p.entryId||Date.now()-(p.at||0)>180000){if(p){try{localStorage.removeItem(AUTOKEY)}catch(e){}}return}
+cheat.speed=Math.max(1,Math.min(4,+p.speed||1));cheat.grip=Math.max(0.25,Math.min(2,+p.grip||1));saveCheat();syncCheat();
+armAutopilotEntry(p.entryId,p.name||"");
+}
+
+let ledCache={key:"",at:0,entries:null};
+function annotateLeaderboard(){
+try{
+if(!APIBASE||!curTrack.id)return;
+const root=document.querySelector(".leaderboard-ui");if(!root)return;
+const box=root.querySelector(".container");if(!box)return;
+const rows=box.querySelectorAll("button.main");if(!rows.length)return;
+const key=curTrack.id+"|"+rows.length,now=Date.now();
+if(ledCache.key!==key||now-ledCache.at>15000){
+  ledCache={key:key,at:now,entries:null};
+  fetch(APIBASE+"/v6/leaderboard?version=0.6.3&trackId="+encodeURIComponent(curTrack.id)+"&skip=0&amount=100&onlyVerified=false",{cache:"no-store"})
+    .then(r=>r.json()).then(d=>{ledCache.entries=(d&&d.entries)||[]}).catch(()=>{});
+  return}
+if(!ledCache.entries)return;
+for(let i=0;i<rows.length;i++){
+  const row=rows[i],txt=row.textContent||"";
+  // Paging or the verified-only filter can shift the rows, so fall back to the
+  // nickname the row actually shows before giving up on it.
+  let e=ledCache.entries[i];
+  if(!e||-1===txt.indexOf(e.nickname))e=ledCache.entries.filter((x=>x.nickname&&-1!==txt.indexOf(x.nickname)))[0]||null;
+  if(!e)continue;
+  const label=cheatBadgeText(e),old=row.querySelector(".pt-cheatbadge");
+  if(!label){if(old)old.remove()}
+  else if(old){if(old.textContent!=="\u26a0 "+label)old.textContent="\u26a0 "+label;old.__ptEntry=e}
+  else{
+    const b=document.createElement("button");
+    b.type="button";b.className="pt-cheatbadge";b.textContent="\u26a0 "+label;
+    b.title=tr("Replay this run with the settings it was driven with");
+    b.style.cssText="display:inline-block;margin-left:6px;padding:2px 7px;border:1px solid rgba(255,145,80,.65);border-radius:3px;background:rgba(255,122,60,.3);color:#ffc39a;font:inherit;font-size:11px;line-height:1.5;white-space:nowrap;vertical-align:middle;cursor:pointer";
+    b.__ptEntry=e;
+    b.addEventListener("click",(function(ev){ev.preventDefault();ev.stopPropagation();replayFromEntry(b.__ptEntry)}));
+    row.appendChild(b)}
+  let arm=row.querySelector(".pt-autodrive");
+  if(!arm){
+    arm=document.createElement("button");arm.type="button";arm.className="pt-autodrive";arm.textContent="\u23f5 "+tr("Autopilot");
+    arm.title=tr("Drive this run with autopilot");
+    arm.style.cssText="display:inline-block;margin-left:6px;padding:2px 7px;border:1px solid rgba(120,200,255,.6);border-radius:3px;background:rgba(90,170,255,.28);color:#cfe6ff;font:inherit;font-size:11px;line-height:1.5;white-space:nowrap;vertical-align:middle;cursor:pointer";
+    arm.addEventListener("click",(function(ev){ev.preventDefault();ev.stopPropagation();armAutopilot(arm.__ptEntry)}));
+    row.appendChild(arm)}
+  arm.__ptEntry=e}
+}catch(e){}}
+setInterval(annotateLeaderboard,1200);
+
+function apiJson(path,opt){return fetch(APIBASE+"/v6/"+path,opt).then(r=>{if(!r.ok)throw new Error("http "+r.status);return r.json()})}
+const ADMINKEY="ptAdmin";let adminToken="";try{adminToken=localStorage.getItem(ADMINKEY)||""}catch(e){}
+function saveAdmin(){try{localStorage.setItem(ADMINKEY,adminToken)}catch(e){}}
+function buildAdminTab(pane){
+if(!APIBASE){pane.appendChild(el("div","pt-hint","The admin tools need the self-hosted server (web build only)."));return}
+const status=el("div","pt-status",""),countEl=el("div","pt-count",""),listEl=el("div","pt-list","");
+const pw=document.createElement("input");pw.type="password";pw.autocomplete="current-password";pw.placeholder=tr("Admin password");
+pw.style.cssText="width:100%;box-sizing:border-box;margin:2px 0 4px;padding:6px 8px;border:1px solid rgba(255,255,255,.25);border-radius:3px;background:rgba(0,0,0,.28);color:#fff;font:inherit;font-size:13px";
+pane.appendChild(pw);
+const applyBtn=el("button","pt-wide",adminToken?"Refresh":"Apply");applyBtn.type="button";pane.appendChild(applyBtn);
+const allBtn=el("button","pt-wide pt-secondary","Delete all on this track");allBtn.type="button";pane.appendChild(allBtn);
+const outBtn=el("button","pt-wide pt-secondary","Sign out");outBtn.type="button";pane.appendChild(outBtn);
+pane.appendChild(countEl);pane.appendChild(listEl);pane.appendChild(status);
+const say=(t,on)=>{status.textContent=t;status.classList.toggle("on",!!on)};
+if(adminToken){pw.placeholder=tr("Signed in.");pw.disabled=!0}
+async function refresh(){
+  if(!adminToken)return;
+  const q=curTrack.id?"&trackId="+encodeURIComponent(curTrack.id):"";
+  const d=await apiJson("admin/entries?token="+encodeURIComponent(adminToken)+q+"&limit=100");
+  countEl.textContent=String(d.total|0)+" "+tr("records")+(curTrack.id?" \u00b7 "+trackLabel(curTrack.id):"");
+  listEl.textContent="";
+  if(!(d.entries||[]).length)listEl.appendChild(el("div","pt-empty","No records yet."));
+  for(const en of d.entries||[]){
+    const row=el("div","pt-replay"),top=el("div","pt-rtop");
+    top.appendChild(el("span","pt-rname","#"+en.id+" "+en.nickname));
+    top.appendChild(el("span","pt-rtime",fmtTime?fmtTime(en.frames):String(en.frames)));
+    const del=el("button","pt-play","\u2715");del.type="button";del.title=tr("Delete this record");
+    del.addEventListener("click",(async ev=>{ev.preventDefault();
+      try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,ids:[en.id]})});await refresh();say(tr("Deleted."),!0)}
+      catch(err){say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+    top.appendChild(del);row.appendChild(top);
+    const badge=cheatBadgeText(en);
+    row.appendChild(el("div","pt-rmeta",trackLabel(en.trackId)+" \u00b7 "+(badge||tr("clean"))));
+    listEl.appendChild(row)}
+  tabHooks.Admin=refresh;
+}
+applyBtn.addEventListener("click",(async e=>{e.preventDefault();
+  try{
+    if(!adminToken){
+      if(!pw.value)return say(tr("Enter the admin password."),!0);
+      const r=await apiJson("admin/login",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({password:pw.value})});
+      adminToken=r.token;saveAdmin();pw.value="";pw.disabled=!0;applyBtn.textContent=tr("Refresh");say(tr("Signed in."),!0);
+    }
+    await refresh();
+  }catch(err){adminToken="";saveAdmin();pw.disabled=!1;applyBtn.textContent=tr("Apply");say(tr("Admin request failed: ")+((err&&err.message)||err),!0)}}));
+outBtn.addEventListener("click",(async e=>{e.preventDefault();
+  try{await apiJson("admin/logout",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken})})}catch(err){}
+  adminToken="";saveAdmin();pw.value="";pw.disabled=!1;applyBtn.textContent=tr("Apply");countEl.textContent="";listEl.textContent="";say("",!1)}));
+allBtn.addEventListener("click",(async e=>{e.preventDefault();
+  if(!adminToken)return say(tr("Enter the admin password."),!0);
+  if(!curTrack.id)return say(tr("No records yet."),!0);
+  if(!window.confirm(tr("Delete every record on this track?")))return;
+  try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,trackId:curTrack.id})});await refresh();say(tr("Deleted."),!0)}
+  catch(err){say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+if(adminToken)refresh().catch(()=>{});
+}
+
+function ptResumeWork(){playPendingReplay(),resumePendingAuto()}
+if("loading"===document.readyState)document.addEventListener("DOMContentLoaded",ptResumeWork);else setTimeout(ptResumeWork,1200);
 
 /* ---------- panel layout: drag + resize ---------- */
 const layout=Object.assign({x:null,y:null,w:null,h:null},(function(){try{const v=JSON.parse(localStorage.getItem(PANELKEY)||"null");return v&&"object"==typeof v?v:{}}catch(e){return{}}})());
@@ -499,9 +728,10 @@ css.textContent=`#pt-mod-panel{position:fixed;top:50%;left:50%;transform:transla
 #pt-mod-panel .pt-toggle{min-width:56px;padding:4px 8px;border:1px solid rgba(255,255,255,.2);border-radius:3px;background:rgba(0,0,0,.28);color:#fff;font:inherit;font-size:12px;cursor:pointer}
 #pt-mod-panel .pt-toggle.on{border-color:#7fe08a;color:#7fe08a;background:rgba(127,224,138,.12)}
 #pt-mod-panel .pt-sliderwrap{display:flex;align-items:center;gap:6px}
-#pt-mod-panel .pt-sliderwrap input[type=range]{-webkit-appearance:none!important;appearance:none!important;width:104px!important;height:14px!important;min-height:14px!important;max-height:14px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;outline:0}
-#pt-mod-panel .pt-sliderwrap input[type=range]::-webkit-slider-runnable-track{height:6px!important;border:0!important;border-radius:3px!important;background:rgba(255,255,255,.22)!important}
-#pt-mod-panel .pt-sliderwrap input[type=range]::-webkit-slider-thumb{-webkit-appearance:none!important;appearance:none!important;width:12px!important;height:12px!important;margin-top:-3px!important;border:0!important;border-radius:50%!important;background:#7fb6ff!important;box-shadow:0 1px 2px rgba(0,0,0,.5)!important;cursor:pointer}
+#pt-mod-panel .pt-slide{position:relative;width:104px;height:20px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+#pt-mod-panel .pt-slide::before{content:"";position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:rgba(255,255,255,.22)}
+#pt-mod-panel .pt-slide-fill{position:absolute;left:0;top:50%;height:6px;margin-top:-3px;border-radius:3px;background:#7fb6ff;pointer-events:none}
+#pt-mod-panel .pt-slide-knob{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#7fb6ff;box-shadow:0 1px 2px rgba(0,0,0,.5);pointer-events:none}
 #pt-mod-panel .pt-pad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,26px);gap:4px;margin:2px 0 6px}
 #pt-mod-panel .pt-padbtn{padding:0;border:0;border-radius:3px;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-size:13px;line-height:1;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
 #pt-mod-panel .pt-padbtn:hover{background:rgba(255,255,255,.18)}
@@ -515,15 +745,57 @@ css.textContent=`#pt-mod-panel{position:fixed;top:50%;left:50%;transform:transla
 #pt-progress .pt-ptext{font-size:11px;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px rgba(0,0,0,.6);min-width:36px;text-align:left}
 #pt-progress.stale{opacity:.45}
 #pt-keys{position:fixed;left:calc(10px + var(--safe-area-horizontal,0px));bottom:calc(10px + var(--safe-area-vertical,0px));z-index:2147483600;display:flex;flex-wrap:wrap;gap:4px;max-width:40vw;pointer-events:none;font-family:inherit}
-#pt-keys .pt-chip{padding:2px 7px;border-radius:4px;background:rgba(10,20,45,.6);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;box-shadow:0 1px 4px rgba(0,0,0,.35)}`;
+#pt-keys .pt-chip{padding:2px 7px;border-radius:4px;background:rgba(10,20,45,.6);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:12px;font-variant-numeric:tabular-nums;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+#pt-fab{position:fixed;right:calc(12px + var(--safe-area-horizontal,0px));bottom:calc(12px + var(--safe-area-vertical,0px));z-index:2147483646;width:44px;height:44px;padding:0;border:0;border-radius:50%;background:rgba(17,32,82,.88);color:#fff;font:inherit;font-size:17px;line-height:44px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;opacity:.85}
+#pt-fab:hover{opacity:1}
+#pt-fab:active{transform:scale(.94)}
+#pt-fab:focus{outline:0}
+html.pt-touch #pt-mod-panel{width:min(700px,96vw);max-height:94vh;font-size:17px}
+html.pt-touch #pt-mod-panel .pt-title{font-size:15px}
+html.pt-touch #pt-mod-panel .pt-close{font-size:27px;padding:0 6px}
+html.pt-touch #pt-mod-panel .pt-tab{font-size:15px;padding:10px 10px}
+html.pt-touch #pt-mod-panel .pt-label{font-size:17px}
+html.pt-touch #pt-mod-panel .pt-key{font-size:15px;min-width:104px;padding:9px 8px}
+html.pt-touch #pt-mod-panel .pt-wide{font-size:16px;padding:11px}
+html.pt-touch #pt-mod-panel .pt-hint{font-size:14px;line-height:1.55}
+html.pt-touch #pt-mod-panel .pt-help-h{font-size:14px}
+html.pt-touch #pt-mod-panel .pt-help-p{font-size:15px;line-height:1.6}
+html.pt-touch #pt-mod-panel .pt-count{font-size:14px}
+html.pt-touch #pt-mod-panel .pt-mini{font-size:14px;padding:8px 12px}
+html.pt-touch #pt-mod-panel .pt-list{max-height:46vh}
+html.pt-touch #pt-mod-panel .pt-replay{padding:8px 2px}
+html.pt-touch #pt-mod-panel .pt-rname{font-size:15px}
+html.pt-touch #pt-mod-panel .pt-rtime{font-size:15px}
+html.pt-touch #pt-mod-panel .pt-play{font-size:14px;padding:7px 14px;line-height:1.4}
+html.pt-touch #pt-mod-panel .pt-rmeta{font-size:12px}
+html.pt-touch #pt-mod-panel .pt-status{font-size:13px}
+html.pt-touch #pt-mod-panel .pt-toggle{font-size:15px;padding:9px 12px;min-width:70px}
+html.pt-touch #pt-mod-panel .pt-segbtn{font-size:14px;padding:8px 12px}
+html.pt-touch #pt-mod-panel .pt-seg{max-width:58%}
+html.pt-touch #pt-mod-panel .pt-val,html.pt-touch #pt-mod-panel .pt-meta{font-size:14px}
+html.pt-touch #pt-mod-panel .pt-slide{width:150px;height:34px}
+html.pt-touch #pt-mod-panel .pt-slide::before{height:10px;margin-top:-5px}
+html.pt-touch #pt-mod-panel .pt-slide-fill{height:10px;margin-top:-5px}
+html.pt-touch #pt-mod-panel .pt-slide-knob{width:24px;height:24px;margin:-12px 0 0 -12px}
+html.pt-touch #pt-mod-panel .pt-pad{grid-template-rows:repeat(2,46px)}
+html.pt-touch #pt-mod-panel .pt-padbtn{font-size:18px}
+html.pt-touch #pt-keys .pt-chip{font-size:15px;padding:5px 9px}
+html.pt-touch #pt-progress .pt-ptext{font-size:14px}
+html.pt-touch #pt-progress .pt-pbar{height:12px}
+html.pt-touch #pt-fab{width:56px;height:56px;line-height:56px;font-size:22px}`;
 document.head.appendChild(css);
+if(TOUCH)document.documentElement.classList.add("pt-touch");
 panel=el("div");panel.id="pt-mod-panel";panel.style.display="none";
 const head=el("div","pt-head");head.appendChild(el("span","pt-title","PolyMod"));
-const close=el("button","pt-close","\u00d7");close.type="button",close.title="Close (Right Shift)",close.addEventListener("click",(e=>{e.preventDefault(),open=!1,applyOpen()}));
-head.appendChild(close),panel.appendChild(head);
+langBtn=el("button","pt-mini","de"===lang?"DE":"EN");langBtn.type="button";langBtn.title="de"===lang?"Auf Englisch umschalten":"Switch to German";langBtn.style.marginLeft="auto",langBtn.style.marginRight="8px";langBtn.addEventListener("click",(e=>{e.preventDefault(),setLang("de"===lang?"en":"de")}));
+const close=el("button","pt-close","\u00d7");close.type="button",close.title=tr("Close (Right Shift)"),close.addEventListener("click",(e=>{e.preventDefault(),open=!1,applyOpen()}));
+head.appendChild(langBtn),head.appendChild(close),panel.appendChild(head);
 tabBar=el("div","pt-tabs"),panelBody=el("div","pt-pane-wrap"),panel.appendChild(tabBar),panel.appendChild(panelBody);
 document.body.appendChild(panel);
-const grip=el("div","pt-resize");grip.title="Drag to resize";panel.appendChild(grip);
+fabEl=el("button","","\u2630");fabEl.id="pt-fab";fabEl.type="button";fabEl.title=tr("Open PolyMod");fabEl.setAttribute("aria-label",tr("Open PolyMod"));
+fabEl.addEventListener("click",(e=>{e.preventDefault(),e.stopPropagation(),open=!open,applyOpen(),fabEl.blur()}));
+document.body.appendChild(fabEl);
+const grip=el("div","pt-resize");grip.title=tr("Drag to resize");panel.appendChild(grip);
 head.addEventListener("pointerdown",startDrag),head.addEventListener("pointermove",moveDrag),head.addEventListener("pointerup",endDrag),head.addEventListener("pointercancel",endDrag);
 grip.addEventListener("pointerdown",startResize),grip.addEventListener("pointermove",moveResize),grip.addEventListener("pointerup",endResize),grip.addEventListener("pointercancel",endResize);
 applyLayout();
@@ -533,12 +805,14 @@ addTab("Replays",buildReplaysTab);
 addTab("HUD",buildHudTab);
 addTab("Graphics",buildGraphicsTab);
 addTab("Cheats",buildCheatsTab);
+if(APIBASE)addTab("Admin",buildAdminTab);
 addTab("Help",buildHelpTab);
 addTab("Debug",buildDebugTab);
 let seenHelp=!1;try{seenHelp="1"===localStorage.getItem("ptSeenHelp")}catch(e){}
 showTab(seenHelp?"Camera":"Help");
 try{seenHelp||localStorage.setItem("ptSeenHelp","1")}catch(e){}
 render();
+localizeTitles(panel);
 applyOpen();
 requestAnimationFrame(loop);
 }

@@ -2,6 +2,9 @@ const fs=require('fs'),path=require('path');
 const ROOT=__dirname, SRC=process.argv[2]||path.join('/tmp','polymod-extract');
 const MB=path.join(SRC,'main.bundle.js'), WB=path.join(SRC,'simulation_worker.bundle.js');
 let src=fs.readFileSync(MB,'utf8');
+const SHIM_A='/*PT_MP_SHIM_START*/',SHIM_B='/*PT_MP_SHIM_END*/';
+{const s0=src.indexOf(SHIM_A);if(s0>=0){const s1=src.indexOf(SHIM_B,s0);if(s1>s0)src=src.slice(0,s0)+src.slice(s1+SHIM_B.length);}}
+const shim=fs.readFileSync(path.join(ROOT,'mod_mp.js'),'utf8');
 const START='/*CAMERA_ORBIT_IJKL*/';
 const TAIL='"loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();';
 const i=src.indexOf(START); if(i<0)throw new Error('mod start marker missing');
@@ -12,10 +15,21 @@ const grab=n=>{const m=new RegExp('^const '+n+'=([\\s\\S]*?);\\r?$','m').exec(bl
 const tn=grab('TRACK_NAMES'), of=grab('OFFICIAL');
 let mod=fs.readFileSync(path.join(ROOT,'mod5.js'),'utf8').replace('__PT_TRACK_NAMES__',()=>tn).replace('__PT_OFFICIAL__',()=>of);
 if(/__PT_[A-Z_]+__/.test(mod))throw new Error('unfilled placeholder');
-src=src.slice(0,i)+mod+src.slice(e);
+src=src.slice(0,i)+mod+'\n'+SHIM_A+'\n'+shim+'\n'+SHIM_B+src.slice(e);
 const AA='antialias:t?.getSettingBoolean(O.A.Antialiasing)??!0';
 const AAN='antialias:(window.__ptGameAA=!!(t?.getSettingBoolean(O.A.Antialiasing)??!0),window.__ptAA?window.__ptAA(window.__ptGameAA):window.__ptGameAA)';
 if(src.includes(AA)){src=src.split(AA).join(AAN);console.log('AA hook: patched');}else console.log('AA hook: present');
+src=src.split('&&!1((0,').join('&&!1&&((0,').split('&&!1&&!1&&').join('&&!1&&');
+const INV='"Invalid replay detected!"',SUPPRESSED='&&!1&&((0,';
+if(!src.includes(INV))console.log('invalid-replay popup: marker missing');
+else if(src.includes(SUPPRESSED))console.log('invalid-replay popup: already suppressed');
+else{
+  const invAt=src.indexOf(INV);
+  const showAt=src.lastIndexOf('.show(',invAt);
+  const ampAt=showAt>0?src.lastIndexOf('&&',showAt):-1;
+  if(ampAt>0&&showAt-ampAt<40){src=src.slice(0,ampAt)+'&&!1'+src.slice(ampAt);console.log('invalid-replay popup: suppressed');}
+  else console.log('invalid-replay popup: anchor not found');
+}
 const WK='new Worker("simulation_worker.bundle.js")';
 if(src.includes(WK)){src=src.split(WK).join('new Worker("simulation_worker.bundle.js#ptSpeed="+(window.__ptCheatSpeed?window.__ptCheatSpeed():1))');console.log('worker URL: factor added');}else console.log('worker URL: factor present');
 const RRE=/\(0,([A-Za-z_$][\w$]*)\.gn\)\(this,([A-Za-z_$][\w$]*),"f"\)\.recordFrame\(([A-Za-z_$][\w$]*)\.frames,\(0,\1\.gn\)\(this,([A-Za-z_$][\w$]*),"f"\)\.controls\)/g;
@@ -84,4 +98,16 @@ while(true){
   } else k=at+12;
 }
 console.log('ack payloads extended:',n);
+// Autopilot: the worker already knows how to deserialize a recording for ghost/verify cars.
+// Arm one over the message port and it returns that run's controls instead of the keyboard's.
+const UCTL='{up:t.userControls.up,right:t.userControls.right,down:t.userControls.down,left:t.userControls.left,reset:t.userControls.reset}';
+if(!w.includes('__ptAutoCtl')){
+  if(!w.includes(UCTL))throw new Error('autopilot controls anchor missing');
+  // Both the realtime and the batched update loops build a user car's controls this way.
+  w=w.split(UCTL).join('((self.__ptAutoCtl&&self.__ptAutoCtl(t.frames))||'+UCTL+')');
+  const MSG='const r=i.data;switch(r.messageType){case Ki.Init:';
+  if(!w.includes(MSG))throw new Error('autopilot message anchor missing');
+  w=w.replace(MSG,'const r=i.data;if(r&&void 0!==r.ptAutoRec){try{const _d=Qa.deserialize(r.ptAutoRec);self.__ptAutoCtl=_d&&_d.getControls?function(f){try{return _d.getControls(f)}catch(e){return null}}:null}catch(e){self.__ptAutoCtl=null}try{postMessage({ptAutoReady:!!self.__ptAutoCtl})}catch(e){}return}switch(r.messageType){case Ki.Init:');
+  console.log('autopilot hooks: patched');
+}else console.log('autopilot hooks: present');
 fs.writeFileSync(WB,w);
