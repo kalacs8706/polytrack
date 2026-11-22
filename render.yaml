@@ -2,7 +2,7 @@
 # The lite build has its own repo (kalacs8706/pserver) and its own blueprint.
 services:
   - type: web
-    name: polytrack
+    name: polymod2026
     runtime: static
     staticPublishPath: ./web
     headers:
