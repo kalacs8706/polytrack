@@ -698,6 +698,18 @@ const events=decodeMoves(run.recording);
 moveRun={trackId:run.trackId,source:run.source,frames:frames,baseFrames:frames,recording:run.recording,carStyle:run.carStyle||"",cheatSpeed:run.cheatSpeed,cheatGrip:run.cheatGrip,events:events};
 return moveRun}
 window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source}:null;
+// Rebuild the event list from the toggle lists, using the encoder's own rules (sorted per
+// key, two toggles on one frame cancel), so a moved frame cannot desync rows from the file.
+function normalizeMoves(){
+const lists={};
+for(const k of MOVE_KEYS)lists[k]=[];
+for(const ev of moveRun.events.slice().sort(((a,b)=>a.f-b.f))){
+const L=lists[ev.k];if(!L)continue;
+const f=Math.max(0,Math.min(5999999,Math.round(ev.f)));
+if(L.length&&L[L.length-1]===f)L.pop();else L.push(f)}
+const out=[];
+for(const k of MOVE_KEYS){const L=lists[k];for(let i=0;i<L.length;i++)out.push({f:L[i],k:k,on:0===i%2})}
+moveRun.events=out.sort(((a,b)=>a.f-b.f))}
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
@@ -726,10 +738,19 @@ if(!moveRun){count.textContent="",timeIn.value="",list.textContent="",list.appen
 count.textContent=fmtTime(moveRun.frames)+" \u00b7 "+moveRun.events.length+" "+tr("moves")+" \u00b7 "+trackLabel(moveRun.trackId)+" \u00b7 "+(moveRun.source||"");
 if(document.activeElement!==timeIn)timeIn.value=String(moveRun.frames);
 list.textContent="";
+normalizeMoves();
 const shown=moveRun.events.slice(0,400);
 for(const ev of shown){
 const row=el("div","pt-replay"),top=el("div","pt-rtop");
-top.appendChild(el("span","pt-rname","#"+ev.f+" "+ev.k+" \u00b7 "+tr(ev.on?"On":"Off")));
+const fIn=document.createElement("input");
+fIn.type="number",fIn.className="pt-num pt-frame",fIn.min="0",fIn.step="1",fIn.value=String(ev.f),fIn.title=tr("Frame of this toggle");
+fIn.addEventListener("change",(e=>{
+e.stopPropagation();
+const v=Math.floor(Number(fIn.value));
+if(!isFinite(v)||v<0){fIn.value=String(ev.f);return}
+ev.f=Math.min(5999999,v),say("",!1),paint()}));
+top.appendChild(fIn);
+top.appendChild(el("span","pt-rname",ev.k+" \u00b7 "+tr(ev.on?"On":"Off")));
 top.appendChild(el("span","pt-rtime",fmtTime(ev.f)));
 const del=el("button","pt-play","\u00d7");del.type="button",del.title=tr("Delete this toggle");
 del.addEventListener("click",(e=>{e.preventDefault();const i=moveRun.events.indexOf(ev);i>=0&&(moveRun.events.splice(i,1),paint())}));
@@ -903,7 +924,9 @@ css.textContent=`#pt-mod-panel{position:fixed;top:50%;left:50%;transform:transla
 #pt-mod-panel .pt-count{font-size:12px;opacity:.8}
 #pt-mod-panel .pt-mini{padding:3px 8px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:11px;cursor:pointer}
 #pt-mod-panel .pt-mini:hover{background:rgba(255,255,255,.24)}
+#pt-mod-panel .pt-frame{width:66px;margin-right:2px;font-size:11px}
 #pt-mod-panel .pt-num{width:92px;padding:3px 6px;border:1px solid rgba(255,255,255,.2);border-radius:3px;background:rgba(0,0,0,.28);color:#fff;font:inherit;font-size:11px;font-variant-numeric:tabular-nums}
+html.pt-touch #pt-mod-panel .pt-frame{width:96px;font-size:15px}
 html.pt-touch #pt-mod-panel .pt-num{width:130px;padding:8px 10px;font-size:15px}
 #pt-mod-panel .pt-list{max-height:38vh;overflow:auto;margin-top:2px}
 #pt-mod-panel .pt-list::-webkit-scrollbar{width:6px}
