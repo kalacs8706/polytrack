@@ -36,7 +36,7 @@ const TRACK_NAMES=__PT_TRACK_NAMES__;
 const OFFICIAL=__PT_OFFICIAL__;
 const RECORD_RE=/^(polytrack_v\d+_[a-z]+_)record_(\d+)_([a-z]+)_([0-9a-f]{64})$/i;
 const HISTKEY="pthist_";const trackFilter={on:!0};const curTrack={id:null,at:0,pending:0};let drawBusy=0;
-const setCurTrack=id=>{if("string"!=typeof id||!id)return;id=id.toLowerCase();if(id===curTrack.id)return;curTrack.id=id,curTrack.at=Date.now();if(drawBusy)return void(curTrack.pending=1);try{tabHooks.Replays&&tabHooks.Replays(),tabHooks.Copy&&tabHooks.Copy()}catch(e){}};
+const setCurTrack=id=>{if("string"!=typeof id||!id)return;id=id.toLowerCase();if(id===curTrack.id)return;curTrack.id=id,curTrack.at=Date.now();if(drawBusy)return void(curTrack.pending=1);try{tabHooks.Replays&&tabHooks.Replays(),tabHooks["Copy run"]&&tabHooks["Copy run"]()}catch(e){}};
 function listHistory(){const out=[];try{for(const k of Object.keys(localStorage)){if(0!==k.indexOf(HISTKEY))continue;try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof v.recording||!v.recording||"number"!=typeof v.frames)continue;out.push({key:k,slot:v.slot|0,kind:"string"==typeof v.kind?v.kind:"default",prefix:"string"==typeof v.prefix?v.prefix:"polytrack_v5_prod_",id:String(v.id||"").toLowerCase(),frames:v.frames,recording:v.recording,at:v.at|0})}catch(e){}}}catch(e){}return out}
 function pruneHistory(){try{const all=listHistory();if(all.length<=160)return;all.sort(((a,b)=>a.at-b.at));for(let i=0;i<all.length-160;i++)try{localStorage.removeItem(all[i].key)}catch(e){}}catch(e){}}
 function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)return;const old=localStorage.getItem(key);if(!old||old===val)return;let o=null;try{o=JSON.parse(old)}catch(e){return}if(!o||"string"!=typeof o.recording||!o.recording||"number"!=typeof o.frames)return;const id=m[4].toLowerCase(),at=Date.now();localStorage.setItem(HISTKEY+m[2]+"_"+m[3]+"_"+id+"_"+o.frames+"_"+at,JSON.stringify({slot:Number(m[2]),kind:m[3],prefix:m[1],id:id,frames:o.frames,recording:o.recording,at:at}));pruneHistory()}catch(e){}}
@@ -622,7 +622,7 @@ row.appendChild(el("div","pt-rmeta",badge?badge:tr("clean")));
 list.appendChild(row)}
 }catch(err){count.textContent="";say(tr("Copy failed: ")+((err&&err.message)||err),!0)}
 };
-tabHooks.Copy=()=>{paint()};
+tabHooks["Copy run"]=()=>{paint()};
 rfr.addEventListener("click",(ev=>{ev.preventDefault(),say("",!1),paint()}));
 }
 

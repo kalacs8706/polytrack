@@ -36,7 +36,7 @@ const TRACK_NAMES={"5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1f
 const OFFICIAL={"5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1fa038":{"url":"tracks/official/summer1.track","name":"Summer 1"},"7eac4fee1111152cfba4d3737410264ca0f22c7f5a2211e79f0099589b8b48c0":{"url":"tracks/official/summer2.track","name":"Summer 2"},"148826aa16ffaa23dbc453b32cff05e025ddbce1773fc7733cc13d218926515a":{"url":"tracks/official/summer3.track","name":"Summer 3"},"93c7363dfea7fb09ca1d23b72cad5df43a30841d41c8ff25fb544c85bb03c7ae":{"url":"tracks/official/summer4.track","name":"Summer 4"},"7603aaeffa1989a649dfaa8e1804bed4481b49df233e377687d0669899566e52":{"url":"tracks/official/summer5.track","name":"Summer 5"},"c117823cf6788e3247b9ee63a0c091c07352bbe352c650a7790dc6718148c2fa":{"url":"tracks/official/summer6.track","name":"Summer 6"},"e4bcaca3a583bb0eb62a700a69d14e89c852f0c5bf740fca76e0519ebdfc9ab1":{"url":"tracks/official/summer7.track","name":"Summer 7"},"7239b17057127936907a805b0caa5d8c6f6c97eca9bdabf1a5312dce479629b7":{"url":"tracks/official/winter1.track","name":"Winter 1"},"99864b635d1891d22e17eb9267527a07a92c49c0f02893729fa2ded90e3ca0f9":{"url":"tracks/official/winter2.track","name":"Winter 2"},"a5341fe706097cff2a3812a3fc0d87399254557328351ae8e5c882700fc1a196":{"url":"tracks/official/winter3.track","name":"Winter 3"},"7d134c939df80c676a258266201beedd3b93572d5603f3ff4339ff8679803715":{"url":"tracks/official/winter4.track","name":"Winter 4"},"2fe4bd46b0075cc25fc770ce50adbb68447cf493c999635bb272d231811dd264":{"url":"tracks/official/winter5.track","name":"Winter 5"},"c20b4ee3cd517ca6cae7e43f047548757287fbd08ba81b97892a3ef520159a34":{"url":"tracks/official/desert1.track","name":"Desert 1"},"88647ea04145fbbbb19b55f1590e038fb0378acb2571110f02cb545cc46b0d57":{"url":"tracks/official/desert2.track","name":"Desert 2"},"2806030c503abb41a1a26fa9a570888be14296172bb273798ef0ad87a108a2ec":{"url":"tracks/official/desert3.track","name":"Desert 3"},"4697ea67b18c3f49b30a3d8884602115536650bc5435c88e3732e64d21a72d33":{"url":"tracks/official/desert4.track","name":"Desert 4"},"e5d084e06db4ab71196fea44efeceb23c8561266a78669c324a38f92581fe2db":{"url":"tracks/official/desert5.track","name":"Desert 5"}};;;
 const RECORD_RE=/^(polytrack_v\d+_[a-z]+_)record_(\d+)_([a-z]+)_([0-9a-f]{64})$/i;
 const HISTKEY="pthist_";const trackFilter={on:!0};const curTrack={id:null,at:0,pending:0};let drawBusy=0;
-const setCurTrack=id=>{if("string"!=typeof id||!id)return;id=id.toLowerCase();if(id===curTrack.id)return;curTrack.id=id,curTrack.at=Date.now();if(drawBusy)return void(curTrack.pending=1);try{tabHooks.Replays&&tabHooks.Replays(),tabHooks.Copy&&tabHooks.Copy()}catch(e){}};
+const setCurTrack=id=>{if("string"!=typeof id||!id)return;id=id.toLowerCase();if(id===curTrack.id)return;curTrack.id=id,curTrack.at=Date.now();if(drawBusy)return void(curTrack.pending=1);try{tabHooks.Replays&&tabHooks.Replays(),tabHooks["Copy run"]&&tabHooks["Copy run"]()}catch(e){}};
 function listHistory(){const out=[];try{for(const k of Object.keys(localStorage)){if(0!==k.indexOf(HISTKEY))continue;try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof v.recording||!v.recording||"number"!=typeof v.frames)continue;out.push({key:k,slot:v.slot|0,kind:"string"==typeof v.kind?v.kind:"default",prefix:"string"==typeof v.prefix?v.prefix:"polytrack_v5_prod_",id:String(v.id||"").toLowerCase(),frames:v.frames,recording:v.recording,at:v.at|0})}catch(e){}}}catch(e){}return out}
 function pruneHistory(){try{const all=listHistory();if(all.length<=160)return;all.sort(((a,b)=>a.at-b.at));for(let i=0;i<all.length-160;i++)try{localStorage.removeItem(all[i].key)}catch(e){}}catch(e){}}
 function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)return;const old=localStorage.getItem(key);if(!old||old===val)return;let o=null;try{o=JSON.parse(old)}catch(e){return}if(!o||"string"!=typeof o.recording||!o.recording||"number"!=typeof o.frames)return;const id=m[4].toLowerCase(),at=Date.now();localStorage.setItem(HISTKEY+m[2]+"_"+m[3]+"_"+id+"_"+o.frames+"_"+at,JSON.stringify({slot:Number(m[2]),kind:m[3],prefix:m[1],id:id,frames:o.frames,recording:o.recording,at:at}));pruneHistory()}catch(e){}}
@@ -622,7 +622,7 @@ row.appendChild(el("div","pt-rmeta",badge?badge:tr("clean")));
 list.appendChild(row)}
 }catch(err){count.textContent="";say(tr("Copy failed: ")+((err&&err.message)||err),!0)}
 };
-tabHooks.Copy=()=>{paint()};
+tabHooks["Copy run"]=()=>{paint()};
 rfr.addEventListener("click",(ev=>{ev.preventDefault(),say("",!1),paint()}));
 }
 
@@ -906,6 +906,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
