@@ -750,7 +750,9 @@ const out=await postVerify(moveRun.trackId,recording,targetFrames);
 const res=out.reply;
 if(!res.finished||"number"!=typeof res.frames||res.frames>=targetFrames)
 throw new Error(tr("The edited run did not reach the finish."));
-return Math.max(1,Math.round(res.frames))}
+// The worker counts the step the car crossed the line in; the game clock (and the
+// leaderboard) store the frame the physics finished on, one below that count.
+return Math.max(1,Math.round(res.frames)-1)}
 window.__ptSimRaw=(trackId,recording,targetFrames,carId)=>postVerify(trackId,recording,targetFrames,carId)
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
@@ -1105,6 +1107,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
