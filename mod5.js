@@ -572,6 +572,119 @@ for(let i=0;i<rows.length;i++){
 setInterval(annotateLeaderboard,1200);
 
 function apiJson(path,opt){return fetch(APIBASE+"/v6/"+path,opt).then(r=>{if(!r.ok)throw new Error("http "+r.status);return r.json()})}
+
+/* ---------- copy a leaderboard run onto your own profile (button lives in index.html) ---------- */
+// Reads the run's stored recording from /v6/recordings and submits it again with your own
+// profile token, so your entry ends up with exactly that run's frames (= its time).
+const COPY_PREFIX="polytrack_v5_prod_",COPY_SLOT=COPY_PREFIX+"user_slot";
+Object.assign(DE,{"Copy a leaderboard run":"Ranglisten-Fahrt \u00fcbernehmen","Copy run":"Fahrt \u00fcbernehmen","Pick a run to copy onto your profile":"W\u00e4hle eine Fahrt, die auf dein Profil kopiert wird","No leaderboard entries for this track yet.":"F\u00fcr diese Strecke gibt es noch keine Ranglisten-Eintr\u00e4ge.","Loading leaderboard\u2026":"Rangliste wird geladen\u2026","No profile selected \u2014 pick a driver slot first.":"Kein Profil gew\u00e4hlt \u2014 w\u00e4hle zuerst einen Fahrerplatz.","No track selected.":"Keine Strecke gew\u00e4hlt.","Copying ":"\u00dcbernehme ","Copied ":"\u00dcbernommen ","Copy failed: ":"\u00dcbernehmen fehlgeschlagen: "," \u2014 reloading leaderboard\u2026":" \u2014 Rangliste wird neu geladen\u2026"});
+function ownProfile(){
+try{
+const raw=localStorage.getItem(COPY_SLOT);if(null==raw)return null;
+let slot=JSON.parse(raw);"string"==typeof slot&&(slot=Number(slot));
+if(!Number.isSafeInteger(slot))return null;
+const p=JSON.parse(localStorage.getItem(COPY_PREFIX+"user_"+slot)||"null");
+return p&&"object"==typeof p&&"string"==typeof p.token&&p.token?p:null
+}catch(e){return null}}
+let copyBox=null,copyList=null,copyStatus=null;
+function copyStyles(){
+if(document.getElementById("pt-copy-css"))return;
+const st=document.createElement("style");st.id="pt-copy-css";
+st.textContent=`#pt-copy{position:fixed;left:calc(12px + var(--safe-area-horizontal,0px));top:calc(52px + var(--safe-area-vertical,0px));z-index:2147483646;width:min(360px,92vw);max-height:56vh;padding:10px 12px;box-sizing:border-box;border-radius:6px;background:rgba(17,32,82,.96);color:#fff;font-family:inherit;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;flex-direction:column}
+#pt-copy .pt-copyhead{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.9}
+#pt-copy .pt-copyx{padding:0 3px;border:0;background:none;color:#fff;font:inherit;font-size:16px;line-height:1;cursor:pointer;opacity:.7}
+#pt-copy .pt-copyx:hover{opacity:1}
+#pt-copy .pt-copyhint{margin:4px 0 6px;font-size:11px;opacity:.6}
+#pt-copy .pt-copylist{flex:1 1 auto;min-height:0;overflow:auto;margin-top:2px}
+#pt-copy .pt-copyrow{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+#pt-copy .pt-copyrow:last-child{border-bottom:0}
+#pt-copy .pt-copyname{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+#pt-copy .pt-copytime{font-size:12px;font-variant-numeric:tabular-nums;opacity:.9}
+#pt-copy .pt-copygo{padding:2px 8px;border:0;border-radius:3px;background:rgba(120,200,255,.28);color:#fff;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+#pt-copy .pt-copygo:hover{background:rgba(120,200,255,.45)}
+#pt-copy .pt-copygo:disabled{opacity:.5;cursor:default}
+#pt-copy .pt-copystatus{margin-top:6px;font-size:11px;line-height:1.35;opacity:0}
+#pt-copy .pt-copystatus.on{opacity:.85}
+#pt-copy .pt-copyempty{padding:6px 0;font-size:11px;opacity:.6}`;
+document.head.appendChild(st);
+}
+function copyElement(){
+copyStyles();
+if(!copyBox){
+copyBox=document.createElement("div");copyBox.id="pt-copy";copyBox.style.display="none";
+const head=document.createElement("div");head.className="pt-copyhead";
+const title=document.createElement("span");title.textContent=tr("Copy a leaderboard run");
+const close=document.createElement("button");close.type="button";close.className="pt-copyx";close.textContent="\u00d7";close.title=tr("Close (Right Shift)");
+close.addEventListener("click",(e=>{e.preventDefault();e.stopPropagation();copyBox.style.display="none"}));
+head.appendChild(title);head.appendChild(close);copyBox.appendChild(head);
+copyBox.appendChild(el("div","pt-copyhint","Pick a run to copy onto your profile"));
+copyList=document.createElement("div");copyList.className="pt-copylist";copyBox.appendChild(copyList);
+copyStatus=document.createElement("div");copyStatus.className="pt-copystatus";copyBox.appendChild(copyStatus);
+document.body.appendChild(copyBox)}
+return copyBox}
+function copySay(t,on){if(!copyStatus)return;copyStatus.textContent=t||"";copyStatus.classList.toggle("on",!!on)}
+async function openCopyPanel(){
+const box=copyElement();
+box.style.display="";
+copyList&&(copyList.textContent="");
+copySay("",!1);
+if(!ownProfile())return copySay(tr("No profile selected \u2014 pick a driver slot first."),!0);
+if(!curTrack.id)return copySay(tr("No track selected."),!0);
+copySay(tr("Loading leaderboard\u2026"),!0);
+try{
+const d=await apiJson("leaderboard?version=0.6.3&trackId="+encodeURIComponent(curTrack.id)+"&skip=0&amount=100&onlyVerified=false");
+const list=(d&&d.entries)||[];
+copySay("",!1);
+if(!list.length)return copyList.appendChild(el("div","pt-copyempty","No leaderboard entries for this track yet."));
+for(let i=0;i<list.length;i++){
+const en=list[i],row=document.createElement("div");row.className="pt-copyrow";
+const name=document.createElement("span");name.className="pt-copyname";name.textContent=(i+1)+". "+(en.nickname||"?");
+const time=document.createElement("span");time.className="pt-copytime";time.textContent=fmtTime(en.frames);
+const go=document.createElement("button");go.type="button";go.className="pt-copygo";go.textContent=tr("Copy run");
+go.addEventListener("click",(e=>{e.preventDefault();e.stopPropagation();copyRun(en,go)}));
+row.appendChild(name);row.appendChild(time);row.appendChild(go);copyList.appendChild(row)}
+}catch(err){copySay(tr("Copy failed: ")+((err&&err.message)||err),!0)}
+}
+async function copyRun(en,go){
+const p=ownProfile();
+if(!p)return copySay(tr("No profile selected \u2014 pick a driver slot first."),!0);
+if(!curTrack.id)return copySay(tr("No track selected."),!0);
+if(go){go.disabled=!0;go.textContent="\u2026"}
+copySay(tr("Copying ")+(en.nickname||"?")+" \u2026",!0);
+try{
+const d=await apiJson("recordings?version=0.6.3&ids="+encodeURIComponent(en.id));
+const rec=d&&d[0];
+if(!rec||"string"!=typeof rec.recording||!rec.recording)throw new Error("recording not available");
+const body=new URLSearchParams();
+body.set("version","0.6.3");
+body.set("userToken",p.token);
+body.set("nickname",p.nickname||"Racer");
+p.countryCode&&body.set("countryCode",p.countryCode);
+body.set("carStyle",rec.carStyle||p.carStyle||"");
+body.set("trackId",curTrack.id);
+body.set("frames",String(en.frames||rec.frames||0));
+body.set("recording",rec.recording);
+// Keep the cheat stamps of the run being copied, so its badge stays accurate.
+body.set("speed",String(Math.max(1,+(en.cheatSpeed)||1)));
+body.set("grip",String(Math.max(.25,+(en.cheatGrip)||1)));
+const res=await fetch(APIBASE+"/v6/leaderboard",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:body.toString()});
+if(!res.ok)throw new Error("http "+res.status);
+copySay(tr("Copied ")+(en.nickname||"?")+" \u2014 "+fmtTime(en.frames)+tr(" \u2014 reloading leaderboard\u2026"),!0);
+setTimeout((()=>{try{location.reload()}catch(e){}}),1200);
+}catch(err){
+if(go){go.disabled=!1;go.textContent=tr("Copy run")}
+copySay(tr("Copy failed: ")+((err&&err.message)||err),!0)
+}
+}
+function wireCopyButton(){
+const b=document.getElementById("pt-copy-run");
+if(!b||b.__ptCopy)return;
+b.__ptCopy=1;
+b.addEventListener("click",(e=>{e.preventDefault();e.stopPropagation();
+const box=copyElement();
+if("none"!==box.style.display){box.style.display="none";return}
+openCopyPanel()}));
+}
 const ADMINKEY="ptAdmin";let adminToken="";try{adminToken=localStorage.getItem(ADMINKEY)||""}catch(e){}
 function saveAdmin(){try{localStorage.setItem(ADMINKEY,adminToken)}catch(e){}}
 function buildAdminTab(pane){
@@ -814,6 +927,7 @@ try{seenHelp||localStorage.setItem("ptSeenHelp","1")}catch(e){}
 render();
 localizeTitles(panel);
 applyOpen();
+wireCopyButton();
 requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
