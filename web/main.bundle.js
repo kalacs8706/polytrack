@@ -697,7 +697,7 @@ const frames=Math.max(1,Math.floor(Number(run.frames)||1));
 const events=decodeMoves(run.recording);
 moveRun={trackId:run.trackId,source:run.source,frames:frames,baseFrames:frames,recording:run.recording,carStyle:run.carStyle||"",cheatSpeed:run.cheatSpeed,cheatGrip:run.cheatGrip,events:events};
 return moveRun}
-window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source}:null;
+window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source,recording:encodeMoves(moveRun.events),original:moveRun.recording}:null;
 // Rebuild the event list from the toggle lists, using the encoder's own rules (sorted per
 // key, two toggles on one frame cancel), so a moved frame cannot desync rows from the file.
 function normalizeMoves(){
@@ -720,29 +720,35 @@ try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof 
 const parsed=n(9117).A.fromExportString(v.data);
 if(parsed&&parsed.trackData&&"function"==typeof parsed.trackData.getId&&parsed.trackData.getId()===id)return v.data}catch(e){}}
 throw new Error("no track file for this track")}
+// Posts the game's own Verify message to the simulation worker and resolves its reply,
+// which carries the frame the car finished on.
+function postVerify(trackId,recording,targetFrames,carId){
+return trackTextFor(trackId).then((function(text){
+const parsed=n(9117).A.fromExportString(text),track=parsed&&parsed.trackData;
+if(!track)throw new Error("could not parse track");
+const mv=n(6421).A.createMountainVertices(track.getBounds());
+const w=window.__ptSimWorker;if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
+const id=carId||900+Math.floor(400*Math.random());
+return new Promise((function(resolve,reject){
+const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),3e4);
+function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==id)return;
+clearTimeout(to),w.removeEventListener("message",on),resolve({reply:d,trackData:track.toSaveString(),vertCount:mv.vertices?mv.vertices.length:0})}
+w.addEventListener("message",on);
+w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:track.toSaveString(),carId:id,carRecording:recording,targetFrames:targetFrames})}))}))}
 // Runs the edited inputs through the game's own physics in the simulation worker and
 // returns the frame the car actually finished on. That frame is what the time should be.
 async function simulateMoves(){
 if(!moveRun)throw new Error("no run loaded");
-const w=window.__ptSimWorker;if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
 const speed=window.__ptCheatSpeed?window.__ptCheatSpeed():1;
 if(1!==speed||1!==+cheat.grip)throw new Error(tr("Reset Car speed and grip to 1\u00d7 before simulating."));
-const text=await trackTextFor(moveRun.trackId);
-const parsed=n(9117).A.fromExportString(text);
-if(!parsed||!parsed.trackData)throw new Error("could not parse track");
-const track=parsed.trackData;
-const mv=n(6421).A.createMountainVertices(track.getBounds());
 const recording=encodeMoves(moveRun.events);
-const carId=1e9+(Date.now()%9e5)+Math.floor(1e3*Math.random());
 const targetFrames=Math.max(180000,Math.floor(1.5*moveRun.frames)||0);
-const res=await new Promise(((resolve,reject)=>{
-const to=setTimeout((()=>{w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),3e4);
-function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==carId)return;
-clearTimeout(to),w.removeEventListener("message",on),resolve(d)}
-w.addEventListener("message",on);
-w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:track.toSaveString(),carId:carId,carRecording:recording,targetFrames:targetFrames})}))
-if(!res.finished||"number"!=typeof res.frames)throw new Error(tr("The edited run did not reach the finish."));
+const out=await postVerify(moveRun.trackId,recording,targetFrames);
+const res=out.reply;
+if(!res.finished||"number"!=typeof res.frames||res.frames>=targetFrames)
+throw new Error(tr("The edited run did not reach the finish.")+" ("+res.frames+" / "+targetFrames+" frames)");
 return Math.max(1,Math.round(res.frames))}
+window.__ptSimRaw=(trackId,recording,targetFrames,carId)=>postVerify(trackId,recording,targetFrames,carId)
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
@@ -1095,6 +1101,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
