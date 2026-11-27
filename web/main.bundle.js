@@ -46,7 +46,7 @@ window.__ptCamPatch="PolyMod UI + IJKL orbit + HUD/gfx/debug/AA + drag/resize";
 function saveCheat(){persist(CHEATKEY,cheat)}
 function syncCheat(){try{const w=window.__ptSimWorker;if(w)w.postMessage({ptCheat:cheatState()})}catch(e){}}
 (function(){try{const P=Worker.prototype;if(P.__ptCheatHooked)return;const post=P.postMessage;
-P.postMessage=function(m,t){try{if(m&&"object"==typeof m&&!ArrayBuffer.isView(m)){this.__ptSim||(window.__ptSimWorker=this),window.__ptRawPost=post;const c={};for(const k in m)c[k]=m[k];c.ptCheat=cheatState();if(window.__ptAutoRecPending){c.ptAutoRec=window.__ptAutoRecPending;window.__ptAutoRecPending=null}m=c,window.__ptLastWorkerMsg=c}}catch(e){}return void 0===t?post.call(this,m):post.call(this,m,t)};
+P.postMessage=function(m,t){try{if(m&&"object"==typeof m&&!ArrayBuffer.isView(m)){window.__ptSimWorker=this,window.__ptRawPost=post;const c={};for(const k in m)c[k]=m[k];c.ptCheat=cheatState();if(window.__ptAutoRecPending){c.ptAutoRec=window.__ptAutoRecPending;window.__ptAutoRecPending=null}m=c,window.__ptLastWorkerMsg=c}}catch(e){}return void 0===t?post.call(this,m):post.call(this,m,t)};
 const addL=P.addEventListener;P.addEventListener=function(t,f,o){try{if("message"===t&&!this.__ptTapped){this.__ptTapped=1;addL.call(this,"message",function(ev){try{const d=ev&&ev.data;if(d&&d.ptCheatAck)window.__ptAckStats=d.ptCheatAck;if(d&&d.ptCtl){window.__ptCtlQ.push(d.ptCtl)}if(d&&"ptAutoReady" in d){try{window.__ptAutoReady&&window.__ptAutoReady(!!d.ptAutoReady)}catch(e){}}if(d&&d.ptStallTrace){window.__ptStallTrace=d.ptStallTrace;try{localStorage.setItem("ptStallTrace",JSON.stringify(d.ptStallTrace))}catch(e){};console.warn("[pt stall] frame "+d.ptStallTrace.at[0]+" at "+d.ptStallTrace.at[1]+" km/h")}}catch(e){}})}}catch(e){}return addL.call(this,t,f,o)};
 P.__ptCheatHooked=!0}catch(e){}})();
 const persist=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
@@ -657,7 +657,7 @@ say(tr("Copy failed: ")+((err&&err.message)||err),!0)
 }
 
 /* ---------- Move editor: change a copied replay's inputs before submitting ---------- */
-Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen","Faster 1%":"1 % schneller","Slower 1%":"1 % langsamer","Simulate":"Simulieren","Simulating\u2026":"Wird simuliert\u2026","Simulated ":"Simuliert ","Simulation failed: ":"Simulation fehlgeschlagen: ","The edited run did not reach the finish.":"Die bearbeitete Fahrt erreicht das Ziel nicht.","Cheated runs have no clean time to simulate.":"Geschummelte Fahrten haben keine saubere Zeit zum Simulieren.","Run the edited moves through the game physics and use the resulting time":"Die bearbeiteten Eingaben durch die Spielphysik laufen lassen und die Zeit \u00fcbernehmen","the time now matches these moves.":"die Zeit passt jetzt zu diesen Eingaben.","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched.":"Eine kopierte Wiederholung ist eine Liste von Tastenwechseln: Jede Zeile schaltet eine Taste in diesem Frame um und hält sie bis zur nächsten Zeile derselben Taste. Lösche eine Zeile, um diesen Wechsel zu entfernen, oder entferne eine ganze Taste. Die Zeit ist das, was die Rangliste speichert; das Spiel simuliert die Fahrt aus diesen Eingaben, daher passt eine Wiederholung mit geänderten Eingaben nicht mehr zur Zeit."});
+Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen","Faster 1%":"1 % schneller","Slower 1%":"1 % langsamer","Simulate":"Simulieren","Simulating\u2026":"Wird simuliert\u2026","Simulated ":"Simuliert ","Simulation failed: ":"Simulation fehlgeschlagen: ","The edited run did not reach the finish.":"Die bearbeitete Fahrt erreicht das Ziel nicht.","Cheated runs have no clean time to simulate.":"Geschummelte Fahrten haben keine saubere Zeit zum Simulieren.","Load this run's track first \u2014 the simulation runs on the track the game has loaded.":"Lade zuerst die Strecke dieser Fahrt \u2014 die Simulation l\u00e4uft auf der geladenen Strecke.","Run the edited moves through the game physics and use the resulting time":"Die bearbeiteten Eingaben durch die Spielphysik laufen lassen und die Zeit \u00fcbernehmen","the time now matches these moves.":"die Zeit passt jetzt zu diesen Eingaben.","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched.":"Eine kopierte Wiederholung ist eine Liste von Tastenwechseln: Jede Zeile schaltet eine Taste in diesem Frame um und hält sie bis zur nächsten Zeile derselben Taste. Lösche eine Zeile, um diesen Wechsel zu entfernen, oder entferne eine ganze Taste. Die Zeit ist das, was die Rangliste speichert; das Spiel simuliert die Fahrt aus diesen Eingaben, daher passt eine Wiederholung mit geänderten Eingaben nicht mehr zur Zeit."});
 const MOVE_KEYS=["up","right","down","left","reset"];
 let moveRun=null;
 function moveCodec(){try{return n(1754).A||null}catch(e){return null}}
@@ -710,7 +710,7 @@ if(L.length&&L[L.length-1]===f)L.pop();else L.push(f)}
 const out=[];
 for(const k of MOVE_KEYS){const L=lists[k];for(let i=0;i<L.length;i++)out.push({f:L[i],k:k,on:0===i%2})}
 moveRun.events=out.sort(((a,b)=>a.f-b.f))}
-const SIM_INIT=0,SIM_VERIFY=1,SIM_VERIFY_RESULT=8;
+const SIM_VERIFY=1,SIM_VERIFY_RESULT=8;
 async function trackTextFor(id){
 if(OFFICIAL[id]){const res=await fetch(OFFICIAL[id].url);if(!res.ok)throw new Error("track file not found");return await res.text()}
 const pfx="polytrack_v5_prod_track_";
@@ -722,25 +722,23 @@ if(parsed&&parsed.trackData&&"function"==typeof parsed.trackData.getId&&parsed.t
 throw new Error("no track file for this track")}
 // Posts the game's own Verify message to the simulation worker and resolves its reply,
 // which carries the frame the car finished on.
-// The simulation worker builds its physics world from an Init message, so a run has to be
-// simulated in a worker that was set up with the run's own track, not the loaded one.
-function postVerify(trackId,recording,targetFrames,carId){
-return trackTextFor(trackId).then((function(text){
+// The simulation worker's physics world is built from the track the game has loaded, so a
+// run can only be timed while its own track is the loaded one - which is what the copy list
+// always shows.
+async function postVerify(trackId,recording,targetFrames,carId){
+if(!curTrack||curTrack.id!==trackId)throw new Error(tr("Load this run's track first \u2014 the simulation runs on the track the game has loaded."));
+const text=await trackTextFor(trackId);
 const parsed=n(9117).A.fromExportString(text),track=parsed&&parsed.trackData;
 if(!track)throw new Error("could not parse track");
-const car=n(641).A;if(!car||!car.models||!car.models.collisionShapeVertices)throw new Error("car collision model not loaded");
 const mv=n(6421).A.createMountainVertices(track.getBounds());
-const parts=track.getPhysicsParts().map((function(e){return{id:e.id,vertices:e.vertices,detector:e.detector?{type:e.detector.type,center:e.detector.center,size:e.detector.size}:null,startOffset:e.startOffset}}));
-const id=carId||1;
-const w=new Worker("simulation_worker.bundle.js");w.__ptSim=1;
-const save=track.toSaveString();
+const w=window.__ptSimWorker;if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
+const save=track.toSaveString(),id=carId||3000+Math.floor(900*Math.random());
 return new Promise((function(resolve,reject){
-const to=setTimeout((function(){w.removeEventListener("message",on),w.terminate(),reject(new Error("simulation timed out"))}),6e4);
+const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),6e4);
 function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==id)return;
-clearTimeout(to),w.removeEventListener("message",on),setTimeout((function(){try{w.terminate()}catch(e){}}),800),resolve({reply:d,trackData:save,vertCount:mv.vertices?mv.vertices.length:0})}
+clearTimeout(to),w.removeEventListener("message",on),resolve({reply:d,trackData:save,vertCount:mv.vertices?mv.vertices.length:0})}
 w.addEventListener("message",on);
-w.postMessage({messageType:SIM_INIT,version:"0.6.3",isRealtime:!1,trackParts:parts,carCollisionShapeVertices:car.models.collisionShapeVertices,carMassOffset:car.massOffset});
-w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:save,carId:id,carRecording:recording,targetFrames:targetFrames})}))}))}
+w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:save,carId:id,carRecording:recording,targetFrames:targetFrames})}))}
 // Runs the edited inputs through the game's own physics in the simulation worker and
 // returns the frame the car actually finished on. That frame is what the time should be.
 async function simulateMoves(){
@@ -1106,6 +1104,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
