@@ -578,7 +578,7 @@ function apiJson(path,opt){return fetch(APIBASE+"/v6/"+path,opt).then(r=>{if(!r.
 // stored replay from /v6/recordings and submits it again with your own profile token, so your
 // entry ends up with exactly that run's frames (= its time).
 const COPY_PREFIX="polytrack_v5_prod_",COPY_SLOT=COPY_PREFIX+"user_slot";
-Object.assign(DE,{"Copy run":"Fahrt \u00fcbernehmen","Copy a leaderboard run":"Ranglisten-Fahrt \u00fcbernehmen","Copy":"\u00dcbernehmen","Copy this run onto your profile":"Diese Fahrt auf dein Profil \u00fcbernehmen","Copies that run's stored replay onto your own profile, so your time matches. Reopen the leaderboard afterwards to see the new entry.":"\u00dcbernimmt die gespeicherte Wiederholung dieser Fahrt auf dein Profil, damit deine Zeit gleich ist. \u00d6ffne danach die Rangliste neu, um den neuen Eintrag zu sehen.","Reopen the leaderboard to see it.":"\u00d6ffne die Rangliste neu, um ihn zu sehen.","No leaderboard entries for this track yet.":"F\u00fcr diese Strecke gibt es noch keine Ranglisten-Eintr\u00e4ge.","Loading leaderboard\u2026":"Rangliste wird geladen\u2026","No profile selected \u2014 pick a driver slot first.":"Kein Profil gew\u00e4hlt \u2014 w\u00e4hle zuerst einen Fahrerplatz.","No track selected.":"Keine Strecke gew\u00e4hlt.","Copying ":"\u00dcbernehme ","Copied ":"\u00dcbernommen ","Copy failed: ":"\u00dcbernehmen fehlgeschlagen: "});
+Object.assign(DE,{"Copy run":"Fahrt \u00fcbernehmen","Copy a leaderboard run":"Ranglisten-Fahrt \u00fcbernehmen","Copy":"\u00dcbernehmen","Copy this run onto your profile":"Diese Fahrt auf dein Profil \u00fcbernehmen","Loads that run's stored replay into the Move editor, so you can change the inputs and the time before you submit it to the leaderboard.":"L\u00e4dt die gespeicherte Wiederholung dieser Fahrt in den Fahrt-Editor, damit du Eingaben und Zeit vor dem Senden \u00e4ndern kannst.","Reopen the leaderboard to see it.":"\u00d6ffne die Rangliste neu, um ihn zu sehen.","No leaderboard entries for this track yet.":"F\u00fcr diese Strecke gibt es noch keine Ranglisten-Eintr\u00e4ge.","Loading leaderboard\u2026":"Rangliste wird geladen\u2026","No profile selected \u2014 pick a driver slot first.":"Kein Profil gew\u00e4hlt \u2014 w\u00e4hle zuerst einen Fahrerplatz.","No track selected.":"Keine Strecke gew\u00e4hlt.","Copying ":"\u00dcbernehme ","Copied ":"\u00dcbernommen ","Copy failed: ":"\u00dcbernehmen fehlgeschlagen: "});
 function ownProfile(){
 try{
 const read=slot=>{if(!Number.isSafeInteger(slot)||slot<0)return null;const p=JSON.parse(localStorage.getItem(COPY_PREFIX+"user_"+slot)||"null");return p&&"object"==typeof p&&"string"==typeof p.token&&p.token?p:null};
@@ -595,7 +595,7 @@ const head=el("div","pt-row"),count=el("span","pt-count","Loading\u2026"),rfr=el
 rfr.type="button",head.appendChild(count),head.appendChild(rfr),pane.appendChild(head);
 const list=el("div","pt-list");pane.appendChild(list);
 const statusEl=el("div","pt-status","");pane.appendChild(statusEl);
-pane.appendChild(el("div","pt-hint","Copies that run's stored replay onto your own profile, so your time matches. Reopen the leaderboard afterwards to see the new entry."));
+pane.appendChild(el("div","pt-hint","Loads that run's stored replay into the Move editor, so you can change the inputs and the time before you submit it to the leaderboard."));
 const say=(t,on)=>{statusEl.textContent=t||"",statusEl.classList.toggle("on",!!t)};
 const paint=async()=>{
 list.textContent="";
@@ -636,28 +636,122 @@ try{
 const d=await apiJson("recordings?version=0.6.3&ids="+encodeURIComponent(en.id));
 const rec=d&&d[0];
 if(!rec||"string"!=typeof rec.recording||!rec.recording)throw new Error("recording not available");
-const body=new URLSearchParams();
-body.set("version","0.6.3");
-body.set("userToken",p.token);
-body.set("nickname",p.nickname||"Racer");
-p.countryCode&&body.set("countryCode",p.countryCode);
-body.set("carStyle",rec.carStyle||p.carStyle||"");
-body.set("trackId",curTrack.id);
-body.set("frames",String(en.frames||rec.frames||0));
-body.set("recording",rec.recording);
-// Keep the cheat stamps of the run being copied, so its badge stays accurate.
-body.set("speed",String(Math.max(1,+(en.cheatSpeed)||1)));
-body.set("grip",String(Math.max(.25,+(en.cheatGrip)||1)));
-const res=await fetch(APIBASE+"/v6/leaderboard",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:body.toString()});
-if(!res.ok)throw new Error("http "+res.status);
-say(tr("Copied ")+(en.nickname||"?")+" \u2014 "+fmtTime(en.frames)+". "+tr("Reopen the leaderboard to see it."),!0);
-if(go){go.disabled=!1;go.textContent=tr("Copy")}
+loadRun({trackId:curTrack.id,source:en.nickname||"?",frames:en.frames||rec.frames||0,recording:rec.recording,carStyle:rec.carStyle||p.carStyle||"",cheatSpeed:en.cheatSpeed,cheatGrip:en.cheatGrip});
+say(tr("Loaded ")+(en.nickname||"?")+tr(" \u2014 edit the moves, then press Submit."),!0);
 try{paint&&paint()}catch(e){}
+showTab("Move editor")
 }catch(err){
 if(go){go.disabled=!1;go.textContent=tr("Copy")}
 say(tr("Copy failed: ")+((err&&err.message)||err),!0)
 }
 }
+
+/* ---------- Move editor: change a copied replay's inputs before submitting ---------- */
+Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen"});
+const MOVE_KEYS=["up","right","down","left","reset"];
+let moveRun=null;
+function moveCodec(){try{return n(1754).A||null}catch(e){return null}}
+// The game stores a run as five toggle-frame lists (up/right/down/left/reset): a key flips at
+// each stored frame and holds until that key's next entry. Read them straight from the file.
+function readRunLists(recording){
+const B=n(6551),P=n(3075).Ay;
+const packed=B.D(recording);if(!packed)throw new Error("invalid recording data");
+const inf=new P.Inflate();inf.push(packed,!0);
+const raw=inf.result;if(inf.err||!(raw instanceof Uint8Array))throw new Error("invalid recording data");
+const lists={};let at=0;
+for(const k of MOVE_KEYS){
+if(raw.length<at+3)throw new Error("invalid recording data");
+const len=raw[at]|(raw[at+1]<<8)|(raw[at+2]<<16);at+=3;
+if(raw.length<at+3*len)throw new Error("invalid recording data");
+const arr=[];
+for(let j=0;j<len;j++){const d=raw[at+3*j]|(raw[at+3*j+1]<<8)|(raw[at+3*j+2]<<16);arr.push(j?arr[j-1]+d:d)}
+at+=3*len,lists[k]=arr}
+return lists}
+function decodeMoves(recording){
+const L=readRunLists(recording),events=[];
+for(const k of MOVE_KEYS){const arr=L[k]||[];for(let j=0;j<arr.length;j++)events.push({f:arr[j],k:k,on:0===j%2})}
+return events.sort(((a,b)=>a.f-b.f))}
+function encodeMoves(events){
+const A=moveCodec();if(!A)throw new Error("replay codec not found");
+const lists={up:[],right:[],down:[],left:[],reset:[]};
+const sorted=events.slice().sort(((a,b)=>a.f-b.f));
+for(const ev of sorted){const L=lists[ev.k];if(!L)continue;
+const f=Math.max(0,Math.min(5999999,Math.round(ev.f)));
+// Two toggles of the same key on the same frame cancel out.
+if(L.length&&L[L.length-1]===f)L.pop();else if(!L.length||L[L.length-1]<f)L.push(f)}
+const out=new A(lists).serialize();
+if("string"!=typeof out||!out)throw new Error("serialize failed");
+return out}
+function loadRun(run){
+const frames=Math.max(1,Math.floor(Number(run.frames)||1));
+const events=decodeMoves(run.recording);
+moveRun={trackId:run.trackId,source:run.source,frames:frames,baseFrames:frames,recording:run.recording,carStyle:run.carStyle||"",cheatSpeed:run.cheatSpeed,cheatGrip:run.cheatGrip,events:events};
+return moveRun}
+window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source}:null;
+function buildMoveTab(pane){
+const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
+head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
+const timeRow=el("div","pt-row"),timeLbl=el("span","pt-label","Time"),timeIn=document.createElement("input");
+timeIn.type="number",timeIn.className="pt-num",timeIn.min="1",timeIn.step="1",timeIn.title="Time in milliseconds \u2014 this is what the leaderboard stores";
+const timeSet=el("button","pt-mini","Set");timeSet.type="button";
+timeRow.appendChild(timeLbl),timeRow.appendChild(timeIn),timeRow.appendChild(timeSet),pane.appendChild(timeRow);
+const status=el("div","pt-status","");
+const say=(t,on)=>{status.textContent=t||"",status.classList.toggle("on",!!t)};
+const act=(label,title,fn)=>{const b=el("button","pt-mini",label);b.type="button";b.title=title;b.addEventListener("click",(e=>{e.preventDefault(),fn(),paint()}));return b};
+const nudge=el("div","pt-row");
+nudge.appendChild(act("\u2212100 ms","Move every input 100 ms earlier",(()=>{if(moveRun)for(const ev of moveRun.events)ev.f=Math.max(0,ev.f-100)})));
+nudge.appendChild(act("+100 ms","Move every input 100 ms later",(()=>{if(moveRun)for(const ev of moveRun.events)ev.f+=100})));
+nudge.appendChild(act("Faster 1%","Play the inputs 1% faster",(()=>{if(moveRun)for(const ev of moveRun.events)ev.f=Math.max(0,Math.round(ev.f*.99))})));
+nudge.appendChild(act("Slower 1%","Play the inputs 1% slower",(()=>{if(moveRun)for(const ev of moveRun.events)ev.f=Math.round(ev.f*1.01)})));
+pane.appendChild(nudge);
+const drops=el("div","pt-row");
+for(const k of MOVE_KEYS)drops.appendChild(act(tr("Drop ")+k,"Remove every "+k+" toggle",(()=>{if(moveRun)moveRun.events=moveRun.events.filter((e=>e.k!==k))})));
+pane.appendChild(drops);
+const sub=el("button","pt-wide","Submit to leaderboard");sub.type="button";pane.appendChild(sub);
+pane.appendChild(status);
+pane.appendChild(el("div","pt-hint","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched."));
+const list=el("div","pt-list");pane.appendChild(list);
+function paint(){
+if(!moveRun){count.textContent="",timeIn.value="",list.textContent="",list.appendChild(el("div","pt-empty","No run loaded \u2014 press Copy in the Copy run tab."));return}
+count.textContent=fmtTime(moveRun.frames)+" \u00b7 "+moveRun.events.length+" "+tr("moves")+" \u00b7 "+trackLabel(moveRun.trackId)+" \u00b7 "+(moveRun.source||"");
+if(document.activeElement!==timeIn)timeIn.value=String(moveRun.frames);
+list.textContent="";
+const shown=moveRun.events.slice(0,400);
+for(const ev of shown){
+const row=el("div","pt-replay"),top=el("div","pt-rtop");
+top.appendChild(el("span","pt-rname","#"+ev.f+" "+ev.k+" \u00b7 "+tr(ev.on?"On":"Off")));
+top.appendChild(el("span","pt-rtime",fmtTime(ev.f)));
+const del=el("button","pt-play","\u00d7");del.type="button",del.title=tr("Delete this toggle");
+del.addEventListener("click",(e=>{e.preventDefault();const i=moveRun.events.indexOf(ev);i>=0&&(moveRun.events.splice(i,1),paint())}));
+top.appendChild(del),row.appendChild(top),list.appendChild(row)}
+if(moveRun.events.length>shown.length)list.appendChild(el("div","pt-hint","Showing the first "+shown.length+" of "+moveRun.events.length+" toggles \u2014 the rest are still submitted."));
+}
+undo.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return;moveRun.frames=moveRun.baseFrames,moveRun.events=decodeMoves(moveRun.recording),say("",!1),paint()}));
+timeSet.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
+const v=Math.floor(Number(timeIn.value));if(!isFinite(v)||v<1)return say(tr("Enter a time in milliseconds."),!0);
+moveRun.frames=v,say(tr("Time set to ")+fmtTime(v),!0),paint()}));
+sub.addEventListener("click",(async e=>{e.preventDefault();
+if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
+const p=ownProfile();if(!p)return say(tr("No profile selected \u2014 pick a driver slot first."),!0);
+if(!moveRun.trackId)return say(tr("No track selected."),!0);
+sub.disabled=!0,say(tr("Submitting\u2026"),!0);
+try{
+const body=new URLSearchParams();
+body.set("version","0.6.3");
+body.set("userToken",p.token);
+body.set("nickname",p.nickname||"Racer");
+p.countryCode&&body.set("countryCode",p.countryCode);
+body.set("carStyle",moveRun.carStyle||p.carStyle||"");
+body.set("trackId",moveRun.trackId);
+body.set("frames",String(Math.max(1,Math.floor(moveRun.frames))));
+body.set("recording",encodeMoves(moveRun.events));
+body.set("speed",String(Math.max(1,+(moveRun.cheatSpeed)||1)));
+body.set("grip",String(Math.max(.25,+(moveRun.cheatGrip)||1)));
+const res=await fetch(APIBASE+"/v6/leaderboard",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:body.toString()});
+if(!res.ok)throw new Error("http "+res.status);
+say(tr("Submitted ")+fmtTime(moveRun.frames)+" \u2014 "+tr("Reopen the leaderboard to see it."),!0)}catch(err){say(tr("Submit failed: ")+((err&&err.message)||err),!0)}finally{sub.disabled=!1}}));
+tabHooks["Move editor"]=()=>{paint()};
+paint()}
 
 const ADMINKEY="ptAdmin";let adminToken="";try{adminToken=localStorage.getItem(ADMINKEY)||""}catch(e){}
 function saveAdmin(){try{localStorage.setItem(ADMINKEY,adminToken)}catch(e){}}
@@ -799,6 +893,8 @@ css.textContent=`#pt-mod-panel{position:fixed;top:50%;left:50%;transform:transla
 #pt-mod-panel .pt-count{font-size:12px;opacity:.8}
 #pt-mod-panel .pt-mini{padding:3px 8px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font:inherit;font-size:11px;cursor:pointer}
 #pt-mod-panel .pt-mini:hover{background:rgba(255,255,255,.24)}
+#pt-mod-panel .pt-num{width:92px;padding:3px 6px;border:1px solid rgba(255,255,255,.2);border-radius:3px;background:rgba(0,0,0,.28);color:#fff;font:inherit;font-size:11px;font-variant-numeric:tabular-nums}
+html.pt-touch #pt-mod-panel .pt-num{width:130px;padding:8px 10px;font-size:15px}
 #pt-mod-panel .pt-list{max-height:38vh;overflow:auto;margin-top:2px}
 #pt-mod-panel .pt-list::-webkit-scrollbar{width:6px}
 #pt-mod-panel .pt-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:3px}
@@ -890,6 +986,7 @@ buildHud();
 addTab("Camera",buildCameraTab);
 addTab("Replays",buildReplaysTab);
 addTab("Copy run",buildCopyTab);
+addTab("Move editor",buildMoveTab);
 addTab("HUD",buildHudTab);
 addTab("Graphics",buildGraphicsTab);
 addTab("Cheats",buildCheatsTab);
@@ -906,6 +1003,9 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
+
+
 
 
 
