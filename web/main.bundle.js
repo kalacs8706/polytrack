@@ -657,7 +657,7 @@ say(tr("Copy failed: ")+((err&&err.message)||err),!0)
 }
 
 /* ---------- Move editor: change a copied replay's inputs before submitting ---------- */
-Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen","Faster 1%":"1 % schneller","Slower 1%":"1 % langsamer","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched.":"Eine kopierte Wiederholung ist eine Liste von Tastenwechseln: Jede Zeile schaltet eine Taste in diesem Frame um und hält sie bis zur nächsten Zeile derselben Taste. Lösche eine Zeile, um diesen Wechsel zu entfernen, oder entferne eine ganze Taste. Die Zeit ist das, was die Rangliste speichert; das Spiel simuliert die Fahrt aus diesen Eingaben, daher passt eine Wiederholung mit geänderten Eingaben nicht mehr zur Zeit."});
+Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen","Faster 1%":"1 % schneller","Slower 1%":"1 % langsamer","Simulate":"Simulieren","Simulating\u2026":"Wird simuliert\u2026","Simulated ":"Simuliert ","Simulation failed: ":"Simulation fehlgeschlagen: ","The edited run did not reach the finish.":"Die bearbeitete Fahrt erreicht das Ziel nicht.","Reset Car speed and grip to 1\u00d7 before simulating.":"Setze Tempo und Grip vor dem Simulieren auf 1\u00d7 zur\u00fcck.","Run the edited moves through the game physics and use the resulting time":"Die bearbeiteten Eingaben durch die Spielphysik laufen lassen und die Zeit \u00fcbernehmen","the time now matches these moves.":"die Zeit passt jetzt zu diesen Eingaben.","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched.":"Eine kopierte Wiederholung ist eine Liste von Tastenwechseln: Jede Zeile schaltet eine Taste in diesem Frame um und hält sie bis zur nächsten Zeile derselben Taste. Lösche eine Zeile, um diesen Wechsel zu entfernen, oder entferne eine ganze Taste. Die Zeit ist das, was die Rangliste speichert; das Spiel simuliert die Fahrt aus diesen Eingaben, daher passt eine Wiederholung mit geänderten Eingaben nicht mehr zur Zeit."});
 const MOVE_KEYS=["up","right","down","left","reset"];
 let moveRun=null;
 function moveCodec(){try{return n(1754).A||null}catch(e){return null}}
@@ -710,13 +710,47 @@ if(L.length&&L[L.length-1]===f)L.pop();else L.push(f)}
 const out=[];
 for(const k of MOVE_KEYS){const L=lists[k];for(let i=0;i<L.length;i++)out.push({f:L[i],k:k,on:0===i%2})}
 moveRun.events=out.sort(((a,b)=>a.f-b.f))}
+const SIM_VERIFY=1,SIM_VERIFY_RESULT=8;
+async function trackTextFor(id){
+if(OFFICIAL[id]){const res=await fetch(OFFICIAL[id].url);if(!res.ok)throw new Error("track file not found");return await res.text()}
+const pfx="polytrack_v5_prod_track_";
+for(const k of Object.keys(localStorage)){
+if(0!==k.indexOf(pfx))continue;
+try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof v.data)continue;
+const parsed=n(9117).A.fromExportString(v.data);
+if(parsed&&parsed.trackData&&"function"==typeof parsed.trackData.getId&&parsed.trackData.getId()===id)return v.data}catch(e){}}
+throw new Error("no track file for this track")}
+// Runs the edited inputs through the game's own physics in the simulation worker and
+// returns the frame the car actually finished on. That frame is what the time should be.
+async function simulateMoves(){
+if(!moveRun)throw new Error("no run loaded");
+const w=window.__ptSimWorker;if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
+const speed=window.__ptCheatSpeed?window.__ptCheatSpeed():1;
+if(1!==speed||1!==+cheat.grip)throw new Error(tr("Reset Car speed and grip to 1\u00d7 before simulating."));
+const text=await trackTextFor(moveRun.trackId);
+const parsed=n(9117).A.fromExportString(text);
+if(!parsed||!parsed.trackData)throw new Error("could not parse track");
+const track=parsed.trackData;
+const mv=n(6421).A.createMountainVertices(track.getBounds());
+const recording=encodeMoves(moveRun.events);
+const carId=1e9+(Date.now()%9e5)+Math.floor(1e3*Math.random());
+const targetFrames=Math.max(180000,Math.floor(1.5*moveRun.frames)||0);
+const res=await new Promise(((resolve,reject)=>{
+const to=setTimeout((()=>{w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),3e4);
+function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==carId)return;
+clearTimeout(to),w.removeEventListener("message",on),resolve(d)}
+w.addEventListener("message",on);
+w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:track.toSaveString(),carId:carId,carRecording:recording,targetFrames:targetFrames})}))
+if(!res.finished||"number"!=typeof res.frames)throw new Error(tr("The edited run did not reach the finish."));
+return Math.max(1,Math.round(res.frames))}
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
 const timeRow=el("div","pt-row"),timeLbl=el("span","pt-label","Time"),timeIn=document.createElement("input");
 timeIn.type="number",timeIn.className="pt-num",timeIn.min="1",timeIn.step="1",timeIn.title="Time in milliseconds \u2014 this is what the leaderboard stores";
 const timeSet=el("button","pt-mini","Set");timeSet.type="button";
-timeRow.appendChild(timeLbl),timeRow.appendChild(timeIn),timeRow.appendChild(timeSet),pane.appendChild(timeRow);
+const sim=el("button","pt-mini","Simulate");sim.type="button",sim.title=tr("Run the edited moves through the game physics and use the resulting time");
+timeRow.appendChild(timeLbl),timeRow.appendChild(timeIn),timeRow.appendChild(timeSet),timeRow.appendChild(sim),pane.appendChild(timeRow);
 const status=el("div","pt-status","");
 const say=(t,on)=>{status.textContent=t||"",status.classList.toggle("on",!!t)};
 const act=(label,title,fn)=>{const b=el("button","pt-mini",label);b.type="button";b.title=title;b.addEventListener("click",(e=>{e.preventDefault(),fn(),paint()}));return b};
@@ -758,6 +792,12 @@ top.appendChild(del),row.appendChild(top),list.appendChild(row)}
 if(moveRun.events.length>shown.length)list.appendChild(el("div","pt-hint","Showing the first "+shown.length+" of "+moveRun.events.length+" toggles \u2014 the rest are still submitted."));
 }
 undo.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return;moveRun.frames=moveRun.baseFrames,moveRun.events=decodeMoves(moveRun.recording),say("",!1),paint()}));
+sim.addEventListener("click",(async e=>{e.preventDefault();
+if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
+sim.disabled=!0,say(tr("Simulating\u2026"),!0);
+try{const f=await simulateMoves();moveRun.frames=f,say(tr("Simulated ")+fmtTime(f)+" \u2014 "+tr("the time now matches these moves."),!0),paint()}
+catch(err){say(tr("Simulation failed: ")+((err&&err.message)||err),!0)}
+finally{sim.disabled=!1}}));
 timeSet.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
 const v=Math.floor(Number(timeIn.value));if(!isFinite(v)||v<1)return say(tr("Enter a time in milliseconds."),!0);
 moveRun.frames=v,say(tr("Time set to ")+fmtTime(v),!0),paint()}));
@@ -1055,6 +1095,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 

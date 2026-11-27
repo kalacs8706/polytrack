@@ -30,6 +30,13 @@ else{
   if(ampAt>0&&showAt-ampAt<40){src=src.slice(0,ampAt)+'&&!1'+src.slice(ampAt);console.log('invalid-replay popup: suppressed');}
   else console.log('invalid-replay popup: anchor not found');
 }
+// VerifyResult carries the finish frame, so the move editor can simulate a run's time.
+{const VOLD="postMessage({messageType:Ki.VerifyResult,carId:l,result:A})",VNEW="postMessage({messageType:Ki.VerifyResult,carId:l,result:A,frames:h.frames,finished:h.hasFinished})";
+const wsrc=fs.readFileSync(WB,'utf8');
+if(wsrc.includes(VNEW))console.log('verify frames: present');
+else if(wsrc.includes(VOLD)){fs.writeFileSync(WB,wsrc.replace(VOLD,VNEW));console.log('verify frames: patched');}
+else console.log('verify frames: anchor missing');}
+
 const WK='new Worker("simulation_worker.bundle.js")';
 if(src.includes(WK)){src=src.split(WK).join('new Worker("simulation_worker.bundle.js#ptSpeed="+(window.__ptCheatSpeed?window.__ptCheatSpeed():1))');console.log('worker URL: factor added');}else console.log('worker URL: factor present');
 const RRE=/\(0,([A-Za-z_$][\w$]*)\.gn\)\(this,([A-Za-z_$][\w$]*),"f"\)\.recordFrame\(([A-Za-z_$][\w$]*)\.frames,\(0,\1\.gn\)\(this,([A-Za-z_$][\w$]*),"f"\)\.controls\)/g;
