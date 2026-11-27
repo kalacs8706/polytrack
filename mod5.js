@@ -187,7 +187,7 @@ function applyOpen(){panel&&(panel.style.display=open?"":"none",open&&applyLayou
 function syncCamHint(){if(!camHintEl)return;camHintEl.textContent="de"===lang?"Halte die Pfeile oben oder IJKL gedr\u00fcckt, um zu umkreisen. Dr\u00fccke "+keyLabel(bind.menu)+", um PolyMod zu \u00f6ffnen oder zu schlie\u00dfen; "+keyLabel(bind.resetCam)+" zentriert die Ansicht.":"Hold the arrows above or IJKL to orbit. Press "+keyLabel(bind.menu)+" to open or close PolyMod; "+keyLabel(bind.resetCam)+" recentres the view."}
 function render(){if(!panel)return;for(const b of panel.querySelectorAll("[data-act]")){const a=b.dataset.act;b.textContent=capture===a?tr("Press a key\u2026"):keyLabel(bind[a]);b.classList.toggle("capturing",capture===a)}syncCamHint()}
 function showTab(name){currentTab=name;for(const t of tabs){const on=t.name===name;t.btn.classList.toggle("active",on),t.pane.style.display=on?"":"none",on&&(t.built||(t.build(t.pane),t.built=!0,localizeTitles(t.pane)),tabHooks[name]&&tabHooks[name]())}}
-function addTab(name,build){const btn=el("button","pt-tab",name);btn.type="button",btn.dataset.tab=name,btn.addEventListener("click",(e=>{e.preventDefault(),showTab(name)}));tabBar.appendChild(btn);const pane=el("div","pt-pane");pane.style.display="none",panelBody.appendChild(pane),tabs.push({name:name,btn:btn,pane:pane,build:build,built:!1})}
+function addTab(name,build,hidden){const btn=el("button","pt-tab",name);btn.type="button",btn.dataset.tab=name,btn.addEventListener("click",(e=>{e.preventDefault(),showTab(name)}));hidden||tabBar.appendChild(btn);const pane=el("div","pt-pane");pane.style.display="none",panelBody.appendChild(pane),tabs.push({name:name,btn:btn,pane:pane,build:build,built:!1,hidden:!!hidden})}
 
 /* ---------- Camera tab ---------- */
 function buildCameraTab(pane){
@@ -985,14 +985,33 @@ applyLayout();
 buildHud();
 addTab("Camera",buildCameraTab);
 addTab("Replays",buildReplaysTab);
-addTab("Copy run",buildCopyTab);
-addTab("Move editor",buildMoveTab);
+addTab("Copy run",buildCopyTab,!0);
+addTab("Move editor",buildMoveTab,!0);
 addTab("HUD",buildHudTab);
 addTab("Graphics",buildGraphicsTab);
 addTab("Cheats",buildCheatsTab);
 if(APIBASE)addTab("Admin",buildAdminTab);
 addTab("Help",buildHelpTab);
 addTab("Debug",buildDebugTab);
+// The copy tools stay out of the tab bar, with nothing in the panel pointing at them,
+// until "copy" is typed and Enter is pressed while the panel is open.
+let gateBuf="";
+function unlockSecretTabs(){
+let any=!1;
+for(let i=0;i<tabs.length;i++){
+const t=tabs[i];
+if(!t.hidden)continue;
+t.hidden=!1,any=!0;
+let next=null;
+for(let j=i+1;j<tabs.length;j++)if(tabs[j].btn.parentNode){next=tabs[j].btn;break}
+tabBar.insertBefore(t.btn,next)}
+any&&showTab("Copy run");
+return any}
+window.addEventListener("keydown",(function(e){
+if(!open||!panel||typing())return;
+if("Enter"===e.key||"Enter"===e.code){const hit=/copy$/.test(gateBuf);gateBuf="",hit&&(e.preventDefault(),e.stopPropagation(),unlockSecretTabs());return}
+if(/^[a-z]$/i.test(e.key||""))gateBuf=(gateBuf+e.key.toLowerCase()).slice(-12)
+}),!0);
 let seenHelp=!1;try{seenHelp="1"===localStorage.getItem("ptSeenHelp")}catch(e){}
 showTab(seenHelp?"Camera":"Help");
 try{seenHelp||localStorage.setItem("ptSeenHelp","1")}catch(e){}
