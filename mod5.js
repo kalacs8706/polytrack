@@ -697,7 +697,7 @@ const frames=Math.max(1,Math.floor(Number(run.frames)||1));
 const events=decodeMoves(run.recording);
 moveRun={trackId:run.trackId,source:run.source,frames:frames,baseFrames:frames,recording:run.recording,carStyle:run.carStyle||"",cheatSpeed:run.cheatSpeed,cheatGrip:run.cheatGrip,events:events};
 return moveRun}
-window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source,recording:encodeMoves(moveRun.events),original:moveRun.recording}:null;
+window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source}:null;
 // Rebuild the event list from the toggle lists, using the encoder's own rules (sorted per
 // key, two toggles on one frame cancel), so a moved frame cannot desync rows from the file.
 function normalizeMoves(){
@@ -736,7 +736,7 @@ const save=track.toSaveString(),id=carId||3000+Math.floor(900*Math.random());
 return new Promise((function(resolve,reject){
 const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),6e4);
 function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==id)return;
-clearTimeout(to),w.removeEventListener("message",on),resolve({reply:d,trackData:save,vertCount:mv.vertices?mv.vertices.length:0})}
+clearTimeout(to),w.removeEventListener("message",on),resolve(d)}
 w.addEventListener("message",on);
 w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:save,carId:id,carRecording:recording,targetFrames:targetFrames})}))}
 // Runs the edited inputs through the game's own physics in the simulation worker and
@@ -746,14 +746,12 @@ if(!moveRun)throw new Error("no run loaded");
 
 const recording=encodeMoves(moveRun.events);
 const targetFrames=Math.max(180000,Math.floor(1.5*moveRun.frames)||0);
-const out=await postVerify(moveRun.trackId,recording,targetFrames);
-const res=out.reply;
+const res=await postVerify(moveRun.trackId,recording,targetFrames);
 if(!res.finished||"number"!=typeof res.frames||res.frames>=targetFrames)
 throw new Error(tr("The edited run did not reach the finish."));
 // The worker counts the step the car crossed the line in; the game clock (and the
 // leaderboard) store the frame the physics finished on, one below that count.
 return Math.max(1,Math.round(res.frames)-1)}
-window.__ptSimRaw=(trackId,recording,targetFrames,carId)=>postVerify(trackId,recording,targetFrames,carId)
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
