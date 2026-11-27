@@ -647,7 +647,7 @@ say(tr("Copy failed: ")+((err&&err.message)||err),!0)
 }
 
 /* ---------- Move editor: change a copied replay's inputs before submitting ---------- */
-Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen"});
+Object.assign(DE,{"Move editor":"Fahrt-Editor","No run loaded \u2014 press Copy in the Copy run tab.":"Keine Fahrt geladen \u2014 dr\u00fccke \u00dcbernehmen im Tab \u201eFahrt \u00fcbernehmen\u201c.","Loaded ":"Geladen "," \u2014 edit the moves, then press Submit.":" \u2014 bearbeite die Bewegungen und dr\u00fccke dann Senden.","Submitting\u2026":"Wird gesendet\u2026","Submitted ":"Gesendet ","Submit failed: ":"Senden fehlgeschlagen: ","Submit to leaderboard":"An die Rangliste senden","Time":"Zeit","Set":"Setzen","Undo":"Zur\u00fccksetzen","moves":"Bewegungen","Enter a time in milliseconds.":"Zeit in Millisekunden eingeben.","Time set to ":"Zeit gesetzt auf ","Delete this toggle":"Diesen Wechsel l\u00f6schen","Drop ":"Entfernen ","Move every input 100 ms earlier":"Alle Eingaben 100 ms fr\u00fcher setzen","Move every input 100 ms later":"Alle Eingaben 100 ms sp\u00e4ter setzen","Play the inputs 1% faster":"Die Eingaben 1 % schneller abspielen","Play the inputs 1% slower":"Die Eingaben 1 % langsamer abspielen","Faster 1%":"1 % schneller","Slower 1%":"1 % langsamer","A copied replay is a list of key toggles: each row flips a key at that frame and holds it until the next row for the same key. Delete a row to drop that toggle, or drop a whole key. Time is what the leaderboard stores; the game simulates the run from these inputs, so a replay whose inputs no longer fit the time will not line up when it is watched.":"Eine kopierte Wiederholung ist eine Liste von Tastenwechseln: Jede Zeile schaltet eine Taste in diesem Frame um und hält sie bis zur nächsten Zeile derselben Taste. Lösche eine Zeile, um diesen Wechsel zu entfernen, oder entferne eine ganze Taste. Die Zeit ist das, was die Rangliste speichert; das Spiel simuliert die Fahrt aus diesen Eingaben, daher passt eine Wiederholung mit geänderten Eingaben nicht mehr zur Zeit."});
 const MOVE_KEYS=["up","right","down","left","reset"];
 let moveRun=null;
 function moveCodec(){try{return n(1754).A||null}catch(e){return null}}
@@ -1003,6 +1003,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
