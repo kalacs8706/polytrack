@@ -581,11 +581,13 @@ const COPY_PREFIX="polytrack_v5_prod_",COPY_SLOT=COPY_PREFIX+"user_slot";
 Object.assign(DE,{"Copy run":"Fahrt \u00fcbernehmen","Copy a leaderboard run":"Ranglisten-Fahrt \u00fcbernehmen","Copy":"\u00dcbernehmen","Copy this run onto your profile":"Diese Fahrt auf dein Profil \u00fcbernehmen","Copies that run's stored replay onto your own profile, so your time matches. Reopen the leaderboard afterwards to see the new entry.":"\u00dcbernimmt die gespeicherte Wiederholung dieser Fahrt auf dein Profil, damit deine Zeit gleich ist. \u00d6ffne danach die Rangliste neu, um den neuen Eintrag zu sehen.","Reopen the leaderboard to see it.":"\u00d6ffne die Rangliste neu, um ihn zu sehen.","No leaderboard entries for this track yet.":"F\u00fcr diese Strecke gibt es noch keine Ranglisten-Eintr\u00e4ge.","Loading leaderboard\u2026":"Rangliste wird geladen\u2026","No profile selected \u2014 pick a driver slot first.":"Kein Profil gew\u00e4hlt \u2014 w\u00e4hle zuerst einen Fahrerplatz.","No track selected.":"Keine Strecke gew\u00e4hlt.","Copying ":"\u00dcbernehme ","Copied ":"\u00dcbernommen ","Copy failed: ":"\u00dcbernehmen fehlgeschlagen: "});
 function ownProfile(){
 try{
-const raw=localStorage.getItem(COPY_SLOT);if(null==raw)return null;
-let slot=JSON.parse(raw);"string"==typeof slot&&(slot=Number(slot));
-if(!Number.isSafeInteger(slot))return null;
-const p=JSON.parse(localStorage.getItem(COPY_PREFIX+"user_"+slot)||"null");
-return p&&"object"==typeof p&&"string"==typeof p.token&&p.token?p:null
+const read=slot=>{if(!Number.isSafeInteger(slot)||slot<0)return null;const p=JSON.parse(localStorage.getItem(COPY_PREFIX+"user_"+slot)||"null");return p&&"object"==typeof p&&"string"==typeof p.token&&p.token?p:null};
+// The game only writes the slot key once there is more than one profile, so a fresh install
+// has none: fall back to slot 0 (its default) and then to whatever profile is stored.
+let p=read(activeSlot());if(p)return p;
+p=read(0);if(p)return p;
+for(let i=0;i<localStorage.length;i++){const m=/^(?:.*_)?user_(\d+)$/.exec(localStorage.key(i)||"");if(m&&(p=read(Number(m[1]))))return p}
+return null
 }catch(e){return null}}
 function buildCopyTab(pane){
 if(!APIBASE){pane.appendChild(el("div","pt-hint","The copy tool needs the self-hosted server (web build only)."));return}
@@ -904,6 +906,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
