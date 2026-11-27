@@ -616,7 +616,17 @@ top.appendChild(el("span","pt-rname","#"+(i+1)+" "+(en.nickname||"?")));
 top.appendChild(el("span","pt-rtime",fmtTime(en.frames)));
 const go=el("button","pt-play","Copy");go.type="button",go.title=tr("Copy this run onto your profile");
 go.addEventListener("click",(ev=>{ev.preventDefault(),ev.stopPropagation(),copyRun(en,go,say,paint)}));
-top.appendChild(go),row.appendChild(top);
+top.appendChild(go);
+// Admin only: remove this run from the leaderboard, same call the Admin tab makes.
+if(adminToken){
+const del=el("button","pt-play","\u00d7");del.type="button",del.title=tr("Delete this record");
+del.addEventListener("click",(async ev=>{ev.preventDefault(),ev.stopPropagation();
+if(del.disabled)return;
+del.disabled=!0,del.textContent="\u2026";
+try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,ids:[en.id]})});say(tr("Deleted."),!0);await paint()}
+catch(err){del.disabled=!1,del.textContent="\u00d7";say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+top.appendChild(del)}
+row.appendChild(top);
 const badge=cheatBadgeText(en);
 row.appendChild(el("div","pt-rmeta",badge?badge:tr("clean")));
 list.appendChild(row)}
@@ -1022,6 +1032,7 @@ requestAnimationFrame(loop);
 }
 "loading"===document.readyState?document.addEventListener("DOMContentLoaded",buildUI):buildUI();
 })();
+
 
 
 
