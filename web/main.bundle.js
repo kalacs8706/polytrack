@@ -830,6 +830,10 @@ function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.
 clearTimeout(to),w.removeEventListener("message",on),resolve(d)}
 w.addEventListener("message",on);
 w.postMessage({messageType:SIM_VERIFY,mountainVertices:mv.vertices,mountainOffset:{x:mv.offset.x,y:mv.offset.y,z:mv.offset.z},trackData:save,carId:id,carRecording:recording,targetFrames:targetFrames})}))}
+// The game clock is 1000 frames a second, so this is 0.01 s: a run stored at exactly the frame
+// the physics finished on can be rejected when the server's replay lands a frame or two later,
+// so every time the mod writes into a run sits this much above the frame it measured.
+const TIME_MARGIN=10;
 // Runs the edited inputs through the game's own physics in the simulation worker and
 // returns the frame the car actually finished on. That frame is what the time should be.
 async function simulateMoves(){
@@ -846,7 +850,7 @@ return Math.max(1,Math.round(res.frames)-1)}
 
 /* ---------- Optimize: pull a track's best run, then tune its moves one by one ---------- */
 Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","runs/min":"Fahrten/min","The optimizer is still running \u2014 press Stop first.":"Der Optimierer l\u00e4uft noch \u2014 dr\u00fccke zuerst Stopp.","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
-Object.assign(DE,{"TAS \u2014 checkpoint by checkpoint":"TAS \u2014 Checkpoint f\u00fcr Checkpoint","Finish":"Ziel","The tuned run no longer reaches the finish \u2014 stopped at ":"Die optimierte Fahrt erreicht das Ziel nicht mehr \u2014 gestoppt bei ","Checkpoint by checkpoint: the run is tuned in stages \u2014 first only the inputs up to the first checkpoint, then from that result the inputs up to the second, and so on, with the finish as the last stage. A stage is scored by the frame its checkpoint is reached on, so it can tune moves that make the rest of the run slower.":"Checkpoint f\u00fcr Checkpoint: die Fahrt wird in Etappen optimiert \u2014 erst nur die Eingaben bis zum ersten Checkpoint, dann von diesem Ergebnis aus die bis zum zweiten, und so weiter, mit dem Ziel als letzter Etappe. Eine Etappe wird nach dem Frame bewertet, in dem ihr Checkpoint erreicht wird, also darf sie auch Bewegungen behalten, die den Rest der Fahrt langsamer machen."});
+Object.assign(DE,{"TAS \u2014 checkpoint by checkpoint":"TAS \u2014 Checkpoint f\u00fcr Checkpoint","stored as ":"gespeichert als "," (+0.01 s slack)":" (+0,01 s Puffer)","Simulate and the optimizer store a time 0.01 s slower than they measure, so the server's replay cannot come out faster than the run.":"Simulieren und der Optimierer speichern die Zeit 0,01 s langsamer als gemessen, damit die Pr\u00fcfung des Servers nicht schneller ausf\u00e4llt als die Fahrt.","Finish":"Ziel","The tuned run no longer reaches the finish \u2014 stopped at ":"Die optimierte Fahrt erreicht das Ziel nicht mehr \u2014 gestoppt bei ","Checkpoint by checkpoint: the run is tuned in stages \u2014 first only the inputs up to the first checkpoint, then from that result the inputs up to the second, and so on, with the finish as the last stage. A stage is scored by the frame its checkpoint is reached on, so it can tune moves that make the rest of the run slower.":"Checkpoint f\u00fcr Checkpoint: die Fahrt wird in Etappen optimiert \u2014 erst nur die Eingaben bis zum ersten Checkpoint, dann von diesem Ergebnis aus die bis zum zweiten, und so weiter, mit dem Ziel als letzter Etappe. Eine Etappe wird nach dem Frame bewertet, in dem ihr Checkpoint erreicht wird, also darf sie auch Bewegungen behalten, die den Rest der Fahrt langsamer machen."});
 // Moving a toggle changes the whole trajectory, so every try is a full simulation. The steps
 // grow only once a size stops finding anything: 1 frame first, as asked, then coarser sizes
 // so a goal far away is still reachable. 12 rounds per size stops a pair of toggles from
@@ -912,7 +916,7 @@ optSearch=token;
 let lastGood=null,workers=null;
 const snap=()=>ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
 const sameMoves=(a,b)=>{if(!b||a.length!==b.length)return!1;for(let i=0;i<a.length;i++){const x=a[i],y=b[i];if(x.f!==y.f||x.k!==y.k||!!x.on!==!!y.on)return!1}return!0};
-const apply=()=>{moveRun.frames=token.best;moveRun.events=snap();lastGood={frames:token.best,events:snap()}};
+const apply=()=>{const f=token.best+TIME_MARGIN;moveRun.frames=f;moveRun.events=snap();lastGood={frames:f,events:snap()}};
 try{
 onStep&&onStep(token,null);
 // Stop works while the workers are still being built.
@@ -924,6 +928,8 @@ recordSims(token,1);
 if(!first.fin)throw new Error(tr("This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again."));
 token.best=first.frames,token.cp=first.cp,apply();
 onStep&&onStep(token,null);
+// The margin is part of the time that gets submitted, so the goal is checked against it.
+if(token.goal&&token.best+TIME_MARGIN<=token.goal)token.met=!0;
 // One stage of the search. It only tries the toggles that sit before the frame it tunes, since
 // a toggle after that point cannot change it.
 const runStage=async function(stage){
@@ -982,7 +988,7 @@ recordSims(token,1);
 if(m&&m.fin){token.best=m.frames,token.cp=m.cp,token.open=!1,apply()}
 else if(m){token.cp=m.cp.length?m.cp:token.cp,token.open=!0}
 onStep&&onStep(token,null);
-if(token.goal&&token.best<=token.goal&&!token.open){token.met=!0;break}
+if(token.goal&&token.best+TIME_MARGIN<=token.goal&&!token.open){token.met=!0;break}
 // The finish stage is the last one; the checkpoint stages run out and hand over to it.
 if(!stage.index)break;
 next++}
@@ -1089,15 +1095,15 @@ const now=Date.now();
 if(step&&step.kept){
 const row=el("div","pt-replay"),top=el("div","pt-rtop");
 top.appendChild(el("span","pt-rname",(step.cp?"CP"+step.cp+" ":"")+step.key+" "+(step.delta>0?"+":"")+step.delta+" ms"));
-top.appendChild(el("span","pt-rtime",fmtTime(step.frame||tk.best)));
+top.appendChild(el("span","pt-rtime",fmtTime((step.frame||tk.best)+(step.cp?0:TIME_MARGIN))));
 row.appendChild(top),list.appendChild(row),list.scrollTop=list.scrollHeight,paintBest()}
 else if(now-lastSay<250)return;
 lastSay=now;
 const secs=Math.max(0,Math.round((now-tk.start)/1e3));
-say(tr("Simulated ")+tk.sims+" \u00b7 "+Math.round(tk.rate.rate||0)+" "+tr("runs/min")+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.stages>1?" \u00b7 "+(tk.stage?"CP "+tk.stage+"/"+(tk.stages-1):tr("Finish")):"")+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
+say(tr("Simulated ")+tk.sims+" \u00b7 "+Math.round(tk.rate.rate||0)+" "+tr("runs/min")+" \u00b7 "+tr("best")+" "+fmtTime(tk.best+TIME_MARGIN)+(tk.stages>1?" \u00b7 "+(tk.stage?"CP "+tk.stage+"/"+(tk.stages-1):tr("Finish")):"")+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
 }),!!tasIn.checked);
 const secs=Math.max(1,Math.round((Date.now()-token.start)/1e3));
-say((token.met?tr("Goal reached \u2014 "):token.open?tr("The tuned run no longer reaches the finish \u2014 stopped at "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+Math.round(token.sims/(secs/60))+" "+tr("runs/min")+" \u00b7 "+secs+" s",!0);
+say((token.met?tr("Goal reached \u2014 "):token.open?tr("The tuned run no longer reaches the finish \u2014 stopped at "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best+TIME_MARGIN)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+Math.round(token.sims/(secs/60))+" "+tr("runs/min")+" \u00b7 "+secs+" s",!0);
 }catch(err){say(tr("Optimization failed: ")+((err&&err.message)||err),!0)}
 finally{startBtn.disabled=!1,stopBtn.disabled=!0,paintBest();
 try{tabHooks["Move editor"]&&tabHooks["Move editor"]()}catch(e){}}
@@ -1122,6 +1128,7 @@ const timeSet=el("button","pt-mini","Set");timeSet.type="button";
 const sim=el("button","pt-mini","Simulate");sim.type="button",sim.title=tr("Run the edited moves through the game physics and use the resulting time");
 timeRow.appendChild(timeLbl),timeRow.appendChild(timeIn),timeRow.appendChild(timeSet),timeRow.appendChild(sim),pane.appendChild(timeRow);
 pane.appendChild(el("div","pt-hint",tr("Simulate replays your moves on the physics the game is running now, so the time matches a run driven with the same Car speed and grip.")));
+pane.appendChild(el("div","pt-hint",tr("Simulate and the optimizer store a time 0.01 s slower than they measure, so the server's replay cannot come out faster than the run.")));
 const status=el("div","pt-status","");
 const say=(t,on)=>{status.textContent=t||"",status.classList.toggle("on",!!t)};
 const act=(label,title,fn)=>{const b=el("button","pt-mini",label);b.type="button";b.title=title;b.addEventListener("click",(e=>{e.preventDefault(),fn(),paint()}));return b};
@@ -1166,7 +1173,7 @@ undo.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return;moveRun
 sim.addEventListener("click",(async e=>{e.preventDefault();
 if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
 sim.disabled=!0,say(tr("Simulating\u2026"),!0);
-try{const f=await simulateMoves();moveRun.frames=f,say(tr("Simulated ")+fmtTime(f)+" \u2014 "+tr("the time now matches these moves."),!0),paint()}
+try{const f=await simulateMoves(),stored=f+TIME_MARGIN;moveRun.frames=stored,say(tr("Simulated ")+fmtTime(f)+" \u2014 "+tr("stored as ")+fmtTime(stored)+tr(" (+0.01 s slack)"),!0),paint()}
 catch(err){say(tr("Simulation failed: ")+((err&&err.message)||err),!0)}
 finally{sim.disabled=!1}}));
 timeSet.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PolyMod for PolyTrack",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Injects the PolyMod overlay (camera, cheats, HUD, replays, leaderboard tools) into the unmodified PolyTrack web game, on any site you allow.",
   "minimum_chrome_version": "111",
   "permissions": ["storage", "scripting"],
