@@ -36,12 +36,15 @@ const TRACK_NAMES={"5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1f
 const OFFICIAL={"5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1fa038":{"url":"tracks/official/summer1.track","name":"Summer 1"},"7eac4fee1111152cfba4d3737410264ca0f22c7f5a2211e79f0099589b8b48c0":{"url":"tracks/official/summer2.track","name":"Summer 2"},"148826aa16ffaa23dbc453b32cff05e025ddbce1773fc7733cc13d218926515a":{"url":"tracks/official/summer3.track","name":"Summer 3"},"93c7363dfea7fb09ca1d23b72cad5df43a30841d41c8ff25fb544c85bb03c7ae":{"url":"tracks/official/summer4.track","name":"Summer 4"},"7603aaeffa1989a649dfaa8e1804bed4481b49df233e377687d0669899566e52":{"url":"tracks/official/summer5.track","name":"Summer 5"},"c117823cf6788e3247b9ee63a0c091c07352bbe352c650a7790dc6718148c2fa":{"url":"tracks/official/summer6.track","name":"Summer 6"},"e4bcaca3a583bb0eb62a700a69d14e89c852f0c5bf740fca76e0519ebdfc9ab1":{"url":"tracks/official/summer7.track","name":"Summer 7"},"7239b17057127936907a805b0caa5d8c6f6c97eca9bdabf1a5312dce479629b7":{"url":"tracks/official/winter1.track","name":"Winter 1"},"99864b635d1891d22e17eb9267527a07a92c49c0f02893729fa2ded90e3ca0f9":{"url":"tracks/official/winter2.track","name":"Winter 2"},"a5341fe706097cff2a3812a3fc0d87399254557328351ae8e5c882700fc1a196":{"url":"tracks/official/winter3.track","name":"Winter 3"},"7d134c939df80c676a258266201beedd3b93572d5603f3ff4339ff8679803715":{"url":"tracks/official/winter4.track","name":"Winter 4"},"2fe4bd46b0075cc25fc770ce50adbb68447cf493c999635bb272d231811dd264":{"url":"tracks/official/winter5.track","name":"Winter 5"},"c20b4ee3cd517ca6cae7e43f047548757287fbd08ba81b97892a3ef520159a34":{"url":"tracks/official/desert1.track","name":"Desert 1"},"88647ea04145fbbbb19b55f1590e038fb0378acb2571110f02cb545cc46b0d57":{"url":"tracks/official/desert2.track","name":"Desert 2"},"2806030c503abb41a1a26fa9a570888be14296172bb273798ef0ad87a108a2ec":{"url":"tracks/official/desert3.track","name":"Desert 3"},"4697ea67b18c3f49b30a3d8884602115536650bc5435c88e3732e64d21a72d33":{"url":"tracks/official/desert4.track","name":"Desert 4"},"e5d084e06db4ab71196fea44efeceb23c8561266a78669c324a38f92581fe2db":{"url":"tracks/official/desert5.track","name":"Desert 5"}};;
 const RECORD_RE=/^(polytrack_v\d+_[a-z]+_)record_(\d+)_([a-z]+)_([0-9a-f]{64})$/i;
 const HISTKEY="pthist_";const trackFilter={on:!0};const curTrack={id:null,at:0,pending:0};let drawBusy=0;
+// Track files the game itself fetched, by id: community tracks are not in OFFICIAL, but the
+// simulation still needs their file.
+const trackUrls=Object.create(null);
 const setCurTrack=id=>{if("string"!=typeof id||!id)return;id=id.toLowerCase();if(id===curTrack.id)return;curTrack.id=id,curTrack.at=Date.now();if(drawBusy)return void(curTrack.pending=1);try{tabHooks.Replays&&tabHooks.Replays(),tabHooks["Copy run"]&&tabHooks["Copy run"]()}catch(e){}};
 function listHistory(){const out=[];try{for(const k of Object.keys(localStorage)){if(0!==k.indexOf(HISTKEY))continue;try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof v.recording||!v.recording||"number"!=typeof v.frames)continue;out.push({key:k,slot:v.slot|0,kind:"string"==typeof v.kind?v.kind:"default",prefix:"string"==typeof v.prefix?v.prefix:"polytrack_v5_prod_",id:String(v.id||"").toLowerCase(),frames:v.frames,recording:v.recording,at:v.at|0})}catch(e){}}}catch(e){}return out}
 function pruneHistory(){try{const all=listHistory();if(all.length<=160)return;all.sort(((a,b)=>a.at-b.at));for(let i=0;i<all.length-160;i++)try{localStorage.removeItem(all[i].key)}catch(e){}}catch(e){}}
 function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)return;const old=localStorage.getItem(key);if(!old||old===val)return;let o=null;try{o=JSON.parse(old)}catch(e){return}if(!o||"string"!=typeof o.recording||!o.recording||"number"!=typeof o.frames)return;const id=m[4].toLowerCase(),at=Date.now();localStorage.setItem(HISTKEY+m[2]+"_"+m[3]+"_"+id+"_"+o.frames+"_"+at,JSON.stringify({slot:Number(m[2]),kind:m[3],prefix:m[1],id:id,frames:o.frames,recording:o.recording,at:at}));pruneHistory()}catch(e){}}
 (function(){try{const SP=Storage.prototype;if(SP.__ptRecHooked)return;SP.__ptRecHooked=1;const si=SP.setItem,gi=SP.getItem;SP.setItem=function(k,v){try{"string"==typeof k&&archiveRecord(k,v)}catch(e){}return si.call(this,k,v)};SP.getItem=function(k){const v=gi.call(this,k);try{if("string"==typeof k){const m=RECORD_RE.exec(k);if(m)setCurTrack(m[4])}}catch(e){}return v}}catch(e){}})();
-(function(){try{const byUrl={};for(const id in OFFICIAL)byUrl[OFFICIAL[id].url]=id;const mark=u=>{try{const raw=String(u),tq=/[?&]trackId=([0-9a-f]{64})/i.exec(raw);if(tq)return setCurTrack(tq[1]);const s=raw.split("?")[0].split("#")[0];if(byUrl[s])return setCurTrack(byUrl[s]);const m=/tracks\/[^?#]*?([0-9a-f]{64})\.track/i.exec(s);if(m)setCurTrack(m[1])}catch(e){}};const f=window.fetch;if(f&&!f.__ptHooked){const wf=function(i){try{mark("string"==typeof i?i:i&&i.url)}catch(e){}return f.apply(this,arguments)};wf.__ptHooked=1,window.fetch=wf}const op=XMLHttpRequest.prototype.open;if(op&&!op.__ptHooked){const wo=function(m,u){try{mark(u)}catch(e){}return op.apply(this,arguments)};wo.__ptHooked=1,XMLHttpRequest.prototype.open=wo}}catch(e){}})();
+(function(){try{const byUrl={};for(const id in OFFICIAL)byUrl[OFFICIAL[id].url]=id;const mark=u=>{try{const raw=String(u),tq=/[?&]trackId=([0-9a-f]{64})/i.exec(raw);if(tq)return setCurTrack(tq[1]);const s=raw.split("?")[0].split("#")[0];if(byUrl[s])return setCurTrack(byUrl[s]);const m=/tracks\/[^?#]*?([0-9a-f]{64})\.track/i.exec(s);if(m)trackUrls[m[1].toLowerCase()]=raw,setCurTrack(m[1])}catch(e){}};const f=window.fetch;if(f&&!f.__ptHooked){const wf=function(i){try{mark("string"==typeof i?i:i&&i.url)}catch(e){}return f.apply(this,arguments)};wf.__ptHooked=1,window.fetch=wf}const op=XMLHttpRequest.prototype.open;if(op&&!op.__ptHooked){const wo=function(m,u){try{mark(u)}catch(e){}return op.apply(this,arguments)};wo.__ptHooked=1,XMLHttpRequest.prototype.open=wo}}catch(e){}})();
 window.__ptCamPatch="PolyMod UI + IJKL orbit + HUD/gfx/debug/AA + drag/resize";
 function saveCheat(){persist(CHEATKEY,cheat)}
 function syncCheat(){try{const w=window.__ptSimWorker;if(w)w.postMessage({ptCheat:cheatState()})}catch(e){}}
@@ -735,13 +738,14 @@ moveRun.events=out.sort(((a,b)=>a.f-b.f))}
 const SIM_VERIFY=1,SIM_VERIFY_RESULT=8;
 async function trackTextFor(id){
 if(OFFICIAL[id]){const res=await fetch(OFFICIAL[id].url);if(!res.ok)throw new Error("track file not found");return await res.text()}
+if(trackUrls[id]){try{const res=await fetch(trackUrls[id]);if(res.ok)return await res.text()}catch(e){}}
 const pfx="polytrack_v5_prod_track_";
 for(const k of Object.keys(localStorage)){
 if(0!==k.indexOf(pfx))continue;
 try{const v=JSON.parse(localStorage.getItem(k)||"null");if(!v||"string"!=typeof v.data)continue;
 const parsed=n(9117).A.fromExportString(v.data);
 if(parsed&&parsed.trackData&&"function"==typeof parsed.trackData.getId&&parsed.trackData.getId()===id)return v.data}catch(e){}}
-throw new Error("no track file for this track")}
+throw new Error(tr("No track file for this track \u2014 open the track in the game once."))}
 // Posts the game's own Verify message to the simulation worker and resolves its reply,
 // which carries the frame the car finished on.
 // The simulation worker's physics world is built from the track the game has loaded, so a
@@ -753,14 +757,22 @@ throw new Error("no track file for this track")}
 async function verifyWorker(){
 if("function"!=typeof window.__ptVerifyWorkerFor)return window.__ptSimWorker;
 try{return (await window.__ptVerifyWorkerFor())||window.__ptSimWorker}catch(e){return window.__ptSimWorker}}
-async function postVerify(trackId,recording,targetFrames,carId){
-if(!curTrack||curTrack.id!==trackId)throw new Error(tr("Load this run's track first \u2014 the simulation runs on the track the game has loaded."));
+// The worker builds its physics world from the track data in the message, not from the track
+// the game has loaded, so any track whose file can be read can be timed.
+// Reading a track and building its terrain vertices costs about as much as a whole
+// simulation, and the optimizer runs hundreds of them on one track, so both are kept.
+const simTrackCache=Object.create(null);
+async function simTrack(trackId){
+if(simTrackCache[trackId])return simTrackCache[trackId];
 const text=await trackTextFor(trackId);
 const parsed=n(9117).A.fromExportString(text),track=parsed&&parsed.trackData;
 if(!track)throw new Error("could not parse track");
 const mv=n(6421).A.createMountainVertices(track.getBounds());
+return simTrackCache[trackId]={save:track.toSaveString(),mv:mv}}
+async function postVerify(trackId,recording,targetFrames,carId){
+const td=await simTrack(trackId);
 const w=await verifyWorker();if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
-const save=track.toSaveString(),id=carId||3000+Math.floor(900*Math.random());
+const save=td.save,mv=td.mv,id=carId||3000+Math.floor(900*Math.random());
 return new Promise((function(resolve,reject){
 const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),6e4);
 function on(ev){const d=ev&&ev.data;if(!d||d.messageType!==SIM_VERIFY_RESULT||d.carId!==id)return;
@@ -780,6 +792,169 @@ throw new Error(tr("The edited run did not reach the finish."));
 // The worker counts the step the car crossed the line in; the game clock (and the
 // leaderboard) store the frame the physics finished on, one below that count.
 return Math.max(1,Math.round(res.frames)-1)}
+
+/* ---------- Optimize: pull a track's best run, then tune its moves one by one ---------- */
+Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
+// Moving a toggle changes the whole trajectory, so every try is a full simulation. The steps
+// grow only once a size stops finding anything: 1 frame first, as asked, then coarser sizes
+// so a goal far away is still reachable. 12 rounds per size stops a pair of toggles from
+// trading the same frames back and forth for ever.
+const OPT_STEPS=[1,2,5,10,25,50,100];
+let optTrackId="",optSearch=null;
+// The worker stops at the frame passed as the target, so a try is only run until it is slower
+// than the best so far: a move that makes the run slower (or crashes it) costs no more than
+// a move that helps.
+async function simEvents(trackId,events,cap){
+const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(cap)));
+if(!res||!res.finished||"number"!=typeof res.frames)return 0;
+const f=Math.max(1,Math.round(res.frames)-1);
+return f<cap?f:0}
+// Runs the stored moves unchanged to see which frame the physics finishes on. The worker
+// counts the step the car crossed the line in, one above the frame the leaderboard stores, so
+// the measurement may sit a frame either side of the listed time.
+async function measureEvents(trackId,events,frames){
+const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(frames)+2));
+if(!res||!res.finished||"number"!=typeof res.frames)return 0;
+return Math.max(1,Math.round(res.frames)-1)}
+async function optimizeRun(trackId,goalFrames,onStep){
+const ev=moveRun.events.map((e=>({f:e.f,k:e.k,on:!!e.on})));
+const w=await verifyWorker();
+if(!w||"function"!=typeof w.postMessage)throw new Error(tr("No simulation worker yet \u2014 start a race once, then the game has a physics worker."));
+const token={stop:!1,met:!1,sims:0,best:Math.max(1,Math.floor(moveRun.frames)),goal:goalFrames||0,start:Date.now(),log:[]};
+optSearch=token;
+try{
+onStep&&onStep(token,null);
+const first=await measureEvents(trackId,ev,token.best);
+token.sims++;
+if(!first)throw new Error(tr("This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again."));
+token.best=first,moveRun.frames=first;
+onStep&&onStep(token,null);
+let base=first;
+// The best run may already be inside the goal: then there is nothing to search for.
+if(token.goal&&first<=token.goal)token.met=!0;
+else{
+outer:
+for(const step of OPT_STEPS){
+for(let round=0;round<12;round++){
+let gain=!1;
+for(let i=0;i<ev.length;i++){
+const e=ev[i];
+for(const dir of [-1,1]){
+if(token.stop)break outer;
+const old=e.f,next=Math.max(0,Math.round(old+dir*step));
+if(next===old)continue;
+e.f=next;
+const f=await simEvents(trackId,ev,token.best);
+token.sims++;
+if(f&&f<token.best){
+token.best=f,token.log.push({frames:f,key:e.k,delta:dir*step,from:base}),base=f,gain=!0;
+moveRun.frames=f;
+onStep&&onStep(token,{key:e.k,delta:dir*step,kept:!0});
+if(token.goal&&f<=token.goal){token.met=!0;break outer}
+}else{
+// Slower, or the car no longer reaches the finish: put the move back.
+e.f=old;
+onStep&&onStep(token,{key:e.k,delta:dir*step,kept:!1})}}}
+if(!gain)break}}}
+}finally{
+optSearch=null;
+moveRun.events=ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
+normalizeMoves();
+moveRun.frames=token.best}
+return token}
+function optTrackList(){
+const out=[],seen={};
+const add=(id,name)=>{if(!id||seen[id])return;seen[id]=1,out.push({id:id,name:name||trackLabel(id)})};
+if(moveRun&&moveRun.trackId)add(moveRun.trackId);
+if(curTrack.id)add(curTrack.id);
+for(const id in OFFICIAL)add(id,OFFICIAL[id].name||trackLabel(id));
+return out}
+async function bestRunEntry(trackId){
+const res=await fetch(copyBase()+"/v6/leaderboard?version=0.6.3&trackId="+encodeURIComponent(trackId)+"&skip=0&amount=100&onlyVerified=false",{cache:"no-store"});
+if(!res.ok)throw new Error("http "+res.status);
+const d=await res.json(),rows=(d&&d.entries)||[];
+let best=null,bestF=0;
+for(const en of rows){const f=Math.floor(Number(en.frames))||0;if(f>0&&(!best||f<bestF))best=en,bestF=f}
+return best}
+async function loadBestRunFor(trackId){
+const en=await bestRunEntry(trackId);
+if(!en)throw new Error(tr("No leaderboard entries for this track yet."));
+const d=await apiJsonAt(copyBase(),"recordings?version=0.6.3&ids="+encodeURIComponent(en.id));
+const rec=d&&d[0];
+if(!rec||"string"!=typeof rec.recording||!rec.recording)throw new Error("recording not available");
+loadRun({trackId:trackId,source:en.nickname||"?",frames:en.frames||rec.frames||0,recording:rec.recording,carStyle:rec.carStyle||"",cheatSpeed:en.cheatSpeed,cheatGrip:en.cheatGrip,src:copySrc});
+return en}
+function buildOptTab(pane){
+const sel=document.createElement("select");
+sel.className="pt-num",sel.style.width="100%",sel.style.maxWidth="100%";
+const tracks=optTrackList();
+for(const t of tracks){const o=document.createElement("option");o.value=t.id,o.textContent=t.name,sel.appendChild(o)}
+const initial=optTrackId||(moveRun&&moveRun.trackId)||curTrack.id||(tracks[0]&&tracks[0].id)||"";
+if(initial)sel.value=initial;
+optTrackId=sel.value||"";
+const trackRow=el("div","pt-row");
+trackRow.appendChild(el("span","pt-label",tr("Track"))),trackRow.appendChild(sel),pane.appendChild(trackRow);
+let refreshSrc=null;
+if(ON_OFFICIAL){
+const srcRow=el("div","pt-row"),srcBtns=[["Own server","mine"],["Official","official"]].map((([label,value])=>{const b=el("button","pt-mini",tr(label));b.type="button",b.style.marginLeft="6px";b.addEventListener("click",(ev=>{ev.preventDefault();if(copySrc===value)return;setCopySrc(value),refreshSrc&&refreshSrc(),say("",!1)}));return [b,value]}));
+srcRow.appendChild(el("span","pt-label",tr("Board:")));
+for(const [b] of srcBtns)srcRow.appendChild(b);
+refreshSrc=()=>{for(const [b,v] of srcBtns){const on=copySrc===v;b.style.opacity=on?"1":".55",b.style.background=on?"rgba(255,255,255,.28)":""}};
+pane.appendChild(srcRow),refreshSrc()}
+const bestEl=el("div","pt-count","");pane.appendChild(bestEl);
+const goalRow=el("div","pt-row"),goalIn=document.createElement("input");
+goalIn.type="number",goalIn.className="pt-num",goalIn.min="1",goalIn.step="0.001",goalIn.style.width="86px",goalIn.title=tr("Goal (s)");
+const startBtn=el("button","pt-mini",tr("Start")),stopBtn=el("button","pt-mini",tr("Stop"));
+startBtn.type="button",stopBtn.type="button",stopBtn.disabled=!0;
+goalRow.appendChild(el("span","pt-label",tr("Goal (s)"))),goalRow.appendChild(goalIn),goalRow.appendChild(startBtn),goalRow.appendChild(stopBtn);
+pane.appendChild(goalRow);
+const status=el("div","pt-status",""),list=el("div","pt-list","");
+const say=(t,on)=>{status.textContent=t||"",status.classList.toggle("on",!!t)};
+pane.appendChild(status),pane.appendChild(list);
+pane.appendChild(el("div","pt-hint",tr("The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.")));
+const paintBest=()=>{
+if(!moveRun){bestEl.textContent=tr("No run loaded \u2014 press Copy in the Copy run tab.");return}
+bestEl.textContent=fmtTime(moveRun.frames)+" \u00b7 "+moveRun.events.length+" "+tr("moves")+" \u00b7 "+trackLabel(moveRun.trackId)+" \u00b7 "+(moveRun.source||"")+" \u00b7 "+tr("official"===moveRun.src?"Official":"Own server")};
+sel.addEventListener("change",(()=>{optTrackId=sel.value,say("",!1)}));
+startBtn.addEventListener("click",(async ev=>{
+ev.preventDefault();
+if(optSearch)return;
+const id=sel.value||optTrackId;
+if(!id)return say(tr("Select a track first."),!0);
+optTrackId=id;
+const raw=String(goalIn.value||"").trim();
+let goal=0;
+if(raw){const g=Math.round(Number(raw)*1e3);if(!isFinite(g)||g<1)return say(tr("Goal must be above 0 seconds."),!0);goal=g}
+startBtn.disabled=!0,stopBtn.disabled=!1,list.textContent="";
+try{
+if(!moveRun||moveRun.trackId!==id||moveRun.src!==copySrc){say(tr("Loading the best run\u2026"),!0);await loadBestRunFor(id)}
+say(tr("Optimizing\u2026"),!0),paintBest();
+const token=await optimizeRun(id,goal,(function(tk,step){
+const secs=Math.max(0,Math.round((Date.now()-tk.start)/1e3));
+say(tr("Simulated ")+tk.sims+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
+if(step&&step.kept){
+const row=el("div","pt-replay"),top=el("div","pt-rtop");
+top.appendChild(el("span","pt-rname",step.key+" "+(step.delta>0?"+":"")+step.delta+" ms"));
+top.appendChild(el("span","pt-rtime",fmtTime(tk.best)));
+row.appendChild(top),list.appendChild(row),list.scrollTop=list.scrollHeight,paintBest()}
+}));
+const secs=Math.max(1,Math.round((Date.now()-token.start)/1e3));
+say((token.met?tr("Goal reached \u2014 "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+secs+" s",!0);
+}catch(err){say(tr("Optimization failed: ")+((err&&err.message)||err),!0)}
+finally{startBtn.disabled=!1,stopBtn.disabled=!0,paintBest();
+try{tabHooks["Move editor"]&&tabHooks["Move editor"]()}catch(e){}}
+}));
+stopBtn.addEventListener("click",(ev=>{ev.preventDefault();if(optSearch)optSearch.stop=!0,stopBtn.disabled=!0}));
+// A run loaded from the Copy tab may be a community track that was not in the list when the
+// tab was built; add it and follow it, so Start works on the run the editor holds.
+tabHooks.Optimize=()=>{refreshSrc&&refreshSrc();
+for(const id of [moveRun&&moveRun.trackId,curTrack.id]){
+if(!id||Array.prototype.some.call(sel.options,(o=>o.value===id)))continue;
+const o=document.createElement("option");o.value=id,o.textContent=trackLabel(id),sel.appendChild(o)}
+if(moveRun&&moveRun.trackId&&sel.value!==moveRun.trackId)sel.value=moveRun.trackId;
+optTrackId=sel.value||"",paintBest()};
+paintBest()}
+window.__ptOptProbe=()=>optSearch?{track:optTrackId,sims:optSearch.sims,best:optSearch.best,goal:optSearch.goal,log:optSearch.log.length}:null;
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
@@ -1108,6 +1283,7 @@ addTab("Camera",buildCameraTab);
 addTab("Replays",buildReplaysTab);
 addTab("Copy run",buildCopyTab,!0);
 addTab("Move editor",buildMoveTab,!0);
+addTab("Optimize",buildOptTab,!0);
 addTab("HUD",buildHudTab);
 addTab("Graphics",buildGraphicsTab);
 addTab("Cheats",buildCheatsTab);
