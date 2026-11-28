@@ -263,65 +263,9 @@
   //
   // and every chunk image (535.bundle.js, ...) then arrives as
   // `n.push([[chunkIds], moduleTable, runtime?])`. Handing them an array whose `push` is an
-  // accessor means the runtime's own callback lands in our setter and every module table
-  // passes through our getter, before webpack installs it.
-  const parts = Object.create(null);
+  // accessor means the runtime's own callback lands in our setter instead of taking the
+  // array over.
   let realRequire = null;
-
-  function adopt(table) {
-    if (!table || typeof table !== "object") return;
-    for (const id in table) {
-      const factory = table[id];
-      if (typeof factory !== "function" || factory.__ptWrapped) continue;
-      parts[id] = factory;
-      if (realRequire) continue;
-      const wrapped = function (module, exports, require) {
-        if (!realRequire && typeof require === "function") realRequire = require;
-        return factory.apply(this, arguments);
-      };
-      wrapped.__ptWrapped = 1;
-      table[id] = wrapped;
-    }
-  }
-
-  // Fallback require over the collected chunk tables, for a module the real require cannot
-  // reach (a different runtime layout, or a build whose chunks never pass through us).
-  const local = Object.create(null);
-  function localRequire(id) {
-    const hit = local[id];
-    if (hit) return hit.exports;
-    const factory = parts[id];
-    if (typeof factory !== "function") throw new Error("game module " + id + " is not available in the extension");
-    const module = { id: id, exports: {}, loaded: false };
-    local[id] = module;
-    try {
-      factory(module, module.exports, localRequire);
-    } catch (err) {
-      delete local[id];
-      throw err;
-    }
-    module.loaded = true;
-    return module.exports;
-  }
-  local.c = local;
-  local.m = parts;
-  local.o = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
-  local.d = (exports, definition) => {
-    for (const key in definition) {
-      if (!Object.prototype.hasOwnProperty.call(exports, key)) {
-        Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
-      }
-    }
-  };
-  local.n = (module) => {
-    const getter = module && module.__esModule ? () => module["default"] : () => module;
-    local.d(getter, { a: getter });
-    return getter;
-  };
-  local.r = (exports) => {
-    Object.defineProperty(exports, "__esModule", { value: true });
-  };
-  local.g = typeof globalThis !== "undefined" ? globalThis : window;
 
   (function hookChunks() {
     try {
@@ -330,16 +274,14 @@
       const chunks = [];
       let runtimePush = null;
       const dispatch = function () {
+        // A chunk entry may carry a runtime callback, which webpack hands its own require.
         const arg = arguments[0];
-        if (arg && typeof arg === "object") {
-          adopt(arg[1]);
-          if (typeof arg[2] === "function") {
-            const run = arg[2];
-            arg[2] = function (require) {
-              if (!realRequire && typeof require === "function") realRequire = require;
-              return run.apply(this, arguments);
-            };
-          }
+        if (arg && typeof arg === "object" && typeof arg[2] === "function") {
+          const run = arg[2];
+          arg[2] = function (require) {
+            if (!realRequire && typeof require === "function") realRequire = require;
+            return run.apply(this, arguments);
+          };
         }
         if (runtimePush) return runtimePush.apply(null, arguments);
         return Array.prototype.push.apply(this, arguments);
@@ -374,12 +316,8 @@
   window.__ptRequire = function (id) {
     const found = modules[id];
     if (found) return found;
-    if (realRequire) {
-      try {
-        return realRequire(id);
-      } catch (err) {}
-    }
-    return localRequire(id);
+    if (realRequire) return realRequire(id);
+    throw new Error("game module " + id + " is not available in the extension");
   };
-  window.__ptWebpackProbe = () => ({ hooked: !!(self.webpackChunk && self.webpackChunk.__ptHook), require: !!realRequire, seeded: !!(self.webpackChunk && self.webpackChunk.length), modules: Object.keys(parts).length });
+  window.__ptWebpackProbe = () => ({ hooked: !!(self.webpackChunk && self.webpackChunk.__ptHook), require: !!realRequire, seeded: !!(self.webpackChunk && self.webpackChunk.length) });
 })();
