@@ -332,8 +332,15 @@
 
   const SIM_PRELUDE =
     "(function(){var p=self.postMessage;" +
-    "self.postMessage=function(m,t){try{if(m&&8===m.messageType&&self.__ptVerify&&void 0===m.frames){" +
-    "m.frames=self.__ptVerify.frames;m.finished=!!self.__ptVerify.hasFinished}}catch(e){}" +
+    // The checkpoint the car is heading for sits just after the state flags, so noting every
+    // change turns a verify into the frame each checkpoint was crossed on.
+    "self.__ptCp=function(t){try{var s=new Uint8Array(t),i=s[12]|s[13]<<8;" +
+    "if(!self.__ptCpList)self.__ptCpList=[];" +
+    "if(i!==self.__ptCpLast){self.__ptCpList.push({index:i,frame:self.__ptVerify?self.__ptVerify.frames:0});self.__ptCpLast=i}" +
+    "}catch(e){s=new Uint8Array(t)}return s};" +
+    "self.postMessage=function(m,t){try{if(m&&8===m.messageType){" +
+    "if(self.__ptVerify&&void 0===m.frames){m.frames=self.__ptVerify.frames;m.finished=!!self.__ptVerify.hasFinished}" +
+    "void 0===m.checkpoints&&(m.checkpoints=self.__ptCpList||[])}}catch(e){}" +
     "return void 0===t?p.call(self,m):p.call(self,m,t)}})();\n";
 
   let simSourceText = null;
@@ -354,9 +361,13 @@
       .replace(/importScripts\(\s*["']lib\/polytrack_physics\.js["']\s*\)/, "0")
       .replace(
         /for\(;!([A-Za-z_$][\w$]*)\.hasFinished&&\1\.frames<([A-Za-z_$][\w$]*);\)/,
-        "for(self.__ptVerify=$1;!$1.hasFinished&&$1.frames<$2;)",
-      );
+        "for(self.__ptVerify=$1,self.__ptCpList=[],self.__ptCpLast=-1;!$1.hasFinished&&$1.frames<$2;)",
+      )
+      // The step's car state is handed to the tracker and comes back as the array the finish
+      // check already expects.
+      .replace(/Xo\(new Uint8Array\(t\)\)/, "Xo(self.__ptCp(t))");
     if (patched === worker) throw new Error("simulation worker was not patched");
+    if (patched.indexOf("Xo(self.__ptCp(t))") < 0) throw new Error("simulation worker was not patched for checkpoints");
     simSourceText = SIM_PRELUDE + physics + "\n" + patched;
     return simSourceText;
   }

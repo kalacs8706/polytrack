@@ -850,6 +850,7 @@ return Math.max(1,Math.round(res.frames)-1)}
 
 /* ---------- Optimize: pull a track's best run, then tune its moves one by one ---------- */
 Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","runs/min":"Fahrten/min","The optimizer is still running \u2014 press Stop first.":"Der Optimierer l\u00e4uft noch \u2014 dr\u00fccke zuerst Stopp.","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
+Object.assign(DE,{"TAS \u2014 checkpoint by checkpoint":"TAS \u2014 Checkpoint f\u00fcr Checkpoint","Finish":"Ziel","The tuned run no longer reaches the finish \u2014 stopped at ":"Die optimierte Fahrt erreicht das Ziel nicht mehr \u2014 gestoppt bei ","Checkpoint by checkpoint: the run is tuned in stages \u2014 first only the inputs up to the first checkpoint, then from that result the inputs up to the second, and so on, with the finish as the last stage. A stage is scored by the frame its checkpoint is reached on, so it can tune moves that make the rest of the run slower.":"Checkpoint f\u00fcr Checkpoint: die Fahrt wird in Etappen optimiert \u2014 erst nur die Eingaben bis zum ersten Checkpoint, dann von diesem Ergebnis aus die bis zum zweiten, und so weiter, mit dem Ziel als letzter Etappe. Eine Etappe wird nach dem Frame bewertet, in dem ihr Checkpoint erreicht wird, also darf sie auch Bewegungen behalten, die den Rest der Fahrt langsamer machen."});
 // Moving a toggle changes the whole trajectory, so every try is a full simulation. The steps
 // grow only once a size stops finding anything: 1 frame first, as asked, then coarser sizes
 // so a goal far away is still reachable. 12 rounds per size stops a pair of toggles from
@@ -869,50 +870,74 @@ const cores=(function(){try{return +navigator.hardwareConcurrency||2}catch(e){re
 if(cores>=4&&"function"==typeof window.__ptVerifyWorkerPool){
 try{const pool=await window.__ptVerifyWorkerPool(2);if(pool&&pool.length)return pool}catch(e){}}
 return w&&"function"==typeof w.postMessage?[w]:[]}
-async function simEvents(trackId,events,cap,worker){
-const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(cap)),undefined,worker);
+// The worker steps the car frame by frame and reports the checkpoint it is heading for at each
+// one, so its reply carries the frame every checkpoint was crossed on. A checkpoint stage is
+// scored by the frame its own checkpoint is reached on, the finish stage by the finish frame.
+function cpList(res){
+const out=[],seen={},list=res&&res.checkpoints;
+if(list&&list.length)for(let i=0;i<list.length;i++){
+const c=list[i];
+if(!c||"number"!=typeof c.index||"number"!=typeof c.frame||c.index<1||seen[c.index])continue;
+seen[c.index]=1,out.push({index:c.index,frame:c.frame})}
+out.sort((function(a,b){return a.index-b.index}));
+return out}
+function cpFrameOf(res,index){
+const list=cpList(res);
+for(let i=0;i<list.length;i++)if(list[i].index>=index)return list[i].frame;
+return 0}
+// The worker stops at the frame passed as the target, so a try runs only until the stage it
+// belongs to is missed: a move that makes that stage slower (or crashes the car) costs no more
+// than a move that helps.
+async function runTry(trackId,events,cap,worker,stage){
+const c=Math.max(2,Math.floor(cap));
+const res=await postVerify(trackId,encodeMoves(events),c,undefined,worker);
+if(stage&&stage.index){const f=cpFrameOf(res,stage.index);return f&&f<c?f:0}
 if(!res||!res.finished||"number"!=typeof res.frames)return 0;
 const f=Math.max(1,Math.round(res.frames)-1);
-return f<cap?f:0}
-// Runs the stored moves unchanged to see which frame the physics finishes on. The worker
-// counts the step the car crossed the line in, one above the frame the leaderboard stores, so
-// the measurement may sit a frame either side of the listed time.
+return f<c?f:0}
+// Runs the stored moves up to the given cap to see how long the physics takes and which
+// checkpoints it crosses; a run that does not finish still reports the checkpoints it reached.
 async function measureEvents(trackId,events,frames,worker){
-const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(frames)+2),undefined,worker);
-if(!res||!res.finished||"number"!=typeof res.frames)return 0;
-return Math.max(1,Math.round(res.frames)-1)}
+const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(frames)),undefined,worker);
+const fin=!!(res&&res.finished&&"number"==typeof res.frames);
+return {frames:fin?Math.max(1,Math.round(res.frames)-1):0,cp:cpList(res),fin:fin}}
 // Runs per minute, smoothed over a couple of seconds so a change in pace shows up soon.
 function recordSims(token,count){
 token.sims+=count;
 const now=Date.now(),r=token.rate,dt=now-r.last;
 if(dt>=2e3){const inst=r.n*6e4/dt;r.rate=r.rate?r.rate*.6+inst*.4:inst,r.n=0,r.last=now}
 r.n+=count}
-async function optimizeRun(trackId,goalFrames,onStep){
+async function optimizeRun(trackId,goalFrames,onStep,tas){
 const ev=moveRun.events.map((e=>({f:e.f,k:e.k,on:!!e.on})));
-const token={stop:!1,met:!1,sims:0,best:Math.max(1,Math.floor(moveRun.frames)),goal:goalFrames||0,start:Date.now(),log:[],rate:{last:Date.now(),n:0,rate:0}};
+const token={stop:!1,met:!1,sims:0,best:Math.max(1,Math.floor(moveRun.frames)),goal:goalFrames||0,start:Date.now(),log:[],rate:{last:Date.now(),n:0,rate:0},cp:[],stage:0,stages:0,open:!1};
 optSearch=token;
+// The run the editor holds only ever carries a state that was measured end to end, so its time
+// and the moves behind it are always written together.
+let lastGood=null,workers=null;
+const snap=()=>ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
+const sameMoves=(a,b)=>{if(!b||a.length!==b.length)return!1;for(let i=0;i<a.length;i++){const x=a[i],y=b[i];if(x.f!==y.f||x.k!==y.k||!!x.on!==!!y.on)return!1}return!0};
+const apply=()=>{moveRun.frames=token.best;moveRun.events=snap();lastGood={frames:token.best,events:snap()}};
 try{
 onStep&&onStep(token,null);
 // Stop works while the workers are still being built.
-const workers=await simWorkers();
+workers=await simWorkers();
 if(!workers.length)throw new Error(tr("No simulation worker yet \u2014 start a race once, then the game has a physics worker."));
 const pair=workers.length>1?workers:[workers[0],workers[0]];
-const first=await measureEvents(trackId,ev,token.best,workers[0]);
+const first=await measureEvents(trackId,ev,Math.max(2,token.best+2),workers[0]);
 recordSims(token,1);
-if(!first)throw new Error(tr("This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again."));
-token.best=first,moveRun.frames=first;
+if(!first.fin)throw new Error(tr("This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again."));
+token.best=first.frames,token.cp=first.cp,apply();
 onStep&&onStep(token,null);
-let base=first;
-// The best run may already be inside the goal: then there is nothing to search for.
-if(token.goal&&first<=token.goal)token.met=!0;
-else{
-outer:
+// One stage of the search. It only tries the toggles that sit before the frame it tunes, since
+// a toggle after that point cannot change it.
+const runStage=async function(stage){
 for(const step of OPT_STEPS){
 for(let round=0;round<12;round++){
 let gain=!1;
 for(let i=0;i<ev.length;i++){
-if(token.stop)break outer;
+if(token.stop)return;
 const e=ev[i];
+if(e.f>stage.frame)continue;
 const back=Math.max(0,Math.round(e.f-step)),fwd=Math.max(0,Math.round(e.f+step));
 const tries=[];
 if(back!==e.f)tries.push({dir:-1,frame:back,worker:pair[0]});
@@ -921,31 +946,66 @@ if(!tries.length)continue;
 // Both directions are timed from the same state, so they can run at the same time on two
 // workers. The earlier one wins, exactly like trying them one after the other, and a losing
 // direction is never written into the run, so it needs no undo.
-const simFor=(function(t){const copy=ev.slice();copy[i]={f:t.frame,k:e.k,on:!!e.on};return simEvents(trackId,copy,token.best,t.worker)});
+const simFor=(function(t){const copy=ev.slice();copy[i]={f:t.frame,k:e.k,on:!!e.on};return runTry(trackId,copy,stage.frame,t.worker,stage)});
 let results;
 if(pair[1]!==pair[0])results=await Promise.all(tries.map(simFor));
 else{results=[];for(const t of tries)results.push(await simFor(t))}
 recordSims(token,results.length);
 let kept=-1;
-for(let j=0;j<results.length;j++)if(results[j]&&results[j]<token.best){kept=j;break}
+for(let j=0;j<results.length;j++)if(results[j]&&results[j]<stage.frame){kept=j;break}
 if(kept>=0){
 const t=tries[kept];
 e.f=t.frame;
-token.best=results[kept],token.log.push({frames:token.best,key:e.k,delta:t.dir*step,from:base}),base=token.best,gain=!0;
-// The editor and Submit read the run itself, so every kept move lands there at once -
-// otherwise a run looked at (or submitted) mid-search would show the new time with the old
-// moves.
-moveRun.frames=token.best;
-moveRun.events=ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
-onStep&&onStep(token,{key:e.k,delta:t.dir*step,kept:!0});
-if(token.goal&&token.best<=token.goal){token.met=!0;break outer}
+token.log.push({frames:results[kept],key:e.k,delta:t.dir*step,from:stage.frame,cp:stage.index||0});
+stage.frame=results[kept];
+// The finish stage scores the run's own time, so the editor can follow it move by move. A
+// checkpoint stage leaves a run that may not reach the finish any more, so it is written only
+// once the whole thing has been measured again.
+if(!stage.index)token.best=stage.frame,token.open=!1,apply();
+onStep&&onStep(token,{key:e.k,delta:t.dir*step,kept:!0,cp:stage.index||0,frame:stage.frame});
+gain=!0;
 }else onStep&&onStep(token,null)}
-if(!gain)break}}}
+if(!gain)break}}};
+// TAS runs the search in stages: one per checkpoint in turn, then the finish. A stage is scored
+// by the frame its own checkpoint is crossed on, so a move that helps reach it is kept even
+// when the rest of the run comes out slower; the next stage then starts from that result.
+if(!token.met){
+let next=1,guard=0;
+while(!token.stop&&guard++<64){
+const target=(tas&&token.cp.length>=next)?token.cp[next-1]:null;
+const stage=target?{index:target.index,frame:target.frame}:{index:0,frame:token.open?Math.max(30000,Math.round(token.best*4)):token.best};
+token.stage=stage.index,token.stages=tas?token.cp.length+1:0;
+onStep&&onStep(token,{stageStart:!0,cp:stage.index});
+await runStage(stage);
+if(token.stop)break;
+// Measured out to a generous cap, so the next stage gets its own checkpoint frames even when
+// this one came out slower.
+const cap=Math.max(30000,Math.round(Math.max(token.best,stage.frame)*4));
+const m=await measureEvents(trackId,ev,cap,workers[0]);
+recordSims(token,1);
+if(m&&m.fin){token.best=m.frames,token.cp=m.cp,token.open=!1,apply()}
+else if(m){token.cp=m.cp.length?m.cp:token.cp,token.open=!0}
+onStep&&onStep(token,null);
+if(token.goal&&token.best<=token.goal&&!token.open){token.met=!0;break}
+// The finish stage is the last one; the checkpoint stages run out and hand over to it.
+if(!stage.index)break;
+next++}
+}
 }finally{
 optSearch=null;
-moveRun.events=ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
-normalizeMoves();
-moveRun.frames=token.best}
+// A search stopped inside a checkpoint stage leaves the last measured run in place, and a run
+// that no longer reaches the finish is never handed over as the result.
+// A search stopped inside a checkpoint stage has moves the editor has not been given yet.
+// They are measured once, so stopping keeps what the stage found instead of throwing it away;
+// a run that no longer reaches the finish is never handed over.
+try{
+if(workers&&lastGood&&!sameMoves(ev,lastGood.events)){
+const m=await measureEvents(trackId,ev,Math.max(30000,Math.round(token.best*2)),workers[0]);
+if(m&&m.fin)token.best=m.frames,token.cp=m.cp,token.open=!1,apply()
+}
+}catch(e){}
+if(token.open&&lastGood){moveRun.frames=lastGood.frames;moveRun.events=lastGood.events}
+normalizeMoves()}
 return token}
 function optTrackList(){
 const out=[],seen={};
@@ -1000,10 +1060,16 @@ const startBtn=el("button","pt-mini",tr("Start")),stopBtn=el("button","pt-mini",
 startBtn.type="button",stopBtn.type="button",stopBtn.disabled=!0;
 goalRow.appendChild(el("span","pt-label",tr("Goal (s)"))),goalRow.appendChild(goalIn),goalRow.appendChild(startBtn),goalRow.appendChild(stopBtn);
 pane.appendChild(goalRow);
+const tasRow=el("div","pt-row"),tasIn=document.createElement("input");
+tasIn.type="checkbox",tasIn.id="pt-opt-tas",tasIn.style.marginRight="8px",tasIn.title=tr("TAS \u2014 checkpoint by checkpoint");
+const tasLbl=el("label","pt-label",tr("TAS \u2014 checkpoint by checkpoint"));
+tasLbl.htmlFor="pt-opt-tas",tasLbl.style.cursor="pointer";
+tasRow.appendChild(tasIn),tasRow.appendChild(tasLbl),pane.appendChild(tasRow);
 const status=el("div","pt-status",""),list=el("div","pt-list","");
 const say=(t,on)=>{status.textContent=t||"",status.classList.toggle("on",!!t)};
 pane.appendChild(status),pane.appendChild(list);
 pane.appendChild(el("div","pt-hint",tr("The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.")));
+pane.appendChild(el("div","pt-hint",tr("Checkpoint by checkpoint: the run is tuned in stages \u2014 first only the inputs up to the first checkpoint, then from that result the inputs up to the second, and so on, with the finish as the last stage. A stage is scored by the frame its checkpoint is reached on, so it can tune moves that make the rest of the run slower.")));
 const paintBest=()=>{
 if(!moveRun){bestEl.textContent=tr("No run loaded \u2014 press Copy in the Copy run tab.");return}
 bestEl.textContent=fmtTime(moveRun.frames)+" \u00b7 "+moveRun.events.length+" "+tr("moves")+" \u00b7 "+trackLabel(moveRun.trackId)+" \u00b7 "+(moveRun.source||"")+" \u00b7 "+tr("official"===moveRun.src?"Official":"Own server")};
@@ -1026,16 +1092,16 @@ const token=await optimizeRun(id,goal,(function(tk,step){
 const now=Date.now();
 if(step&&step.kept){
 const row=el("div","pt-replay"),top=el("div","pt-rtop");
-top.appendChild(el("span","pt-rname",step.key+" "+(step.delta>0?"+":"")+step.delta+" ms"));
-top.appendChild(el("span","pt-rtime",fmtTime(tk.best)));
+top.appendChild(el("span","pt-rname",(step.cp?"CP"+step.cp+" ":"")+step.key+" "+(step.delta>0?"+":"")+step.delta+" ms"));
+top.appendChild(el("span","pt-rtime",fmtTime(step.frame||tk.best)));
 row.appendChild(top),list.appendChild(row),list.scrollTop=list.scrollHeight,paintBest()}
 else if(now-lastSay<250)return;
 lastSay=now;
 const secs=Math.max(0,Math.round((now-tk.start)/1e3));
-say(tr("Simulated ")+tk.sims+" \u00b7 "+Math.round(tk.rate.rate||0)+" "+tr("runs/min")+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
-}));
+say(tr("Simulated ")+tk.sims+" \u00b7 "+Math.round(tk.rate.rate||0)+" "+tr("runs/min")+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.stages>1?" \u00b7 "+(tk.stage?"CP "+tk.stage+"/"+(tk.stages-1):tr("Finish")):"")+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
+}),!!tasIn.checked);
 const secs=Math.max(1,Math.round((Date.now()-token.start)/1e3));
-say((token.met?tr("Goal reached \u2014 "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+Math.round(token.sims/(secs/60))+" "+tr("runs/min")+" \u00b7 "+secs+" s",!0);
+say((token.met?tr("Goal reached \u2014 "):token.open?tr("The tuned run no longer reaches the finish \u2014 stopped at "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+Math.round(token.sims/(secs/60))+" "+tr("runs/min")+" \u00b7 "+secs+" s",!0);
 }catch(err){say(tr("Optimization failed: ")+((err&&err.message)||err),!0)}
 finally{startBtn.disabled=!1,stopBtn.disabled=!0,paintBest();
 try{tabHooks["Move editor"]&&tabHooks["Move editor"]()}catch(e){}}
@@ -1050,7 +1116,7 @@ const o=document.createElement("option");o.value=id,o.textContent=trackLabel(id)
 if(moveRun&&moveRun.trackId&&sel.value!==moveRun.trackId)sel.value=moveRun.trackId;
 optTrackId=sel.value||"",paintBest()};
 paintBest()}
-window.__ptOptProbe=()=>optSearch?{track:optTrackId,sims:optSearch.sims,best:optSearch.best,goal:optSearch.goal,log:optSearch.log.length,rate:Math.round(optSearch.rate.rate||0)}:null;
+window.__ptOptProbe=()=>optSearch?{track:optTrackId,sims:optSearch.sims,best:optSearch.best,goal:optSearch.goal,log:optSearch.log.length,rate:Math.round(optSearch.rate.rate||0),cp:optSearch.cp.length,stage:optSearch.stage,stages:optSearch.stages,open:!!optSearch.open}:null;
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
