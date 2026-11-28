@@ -726,7 +726,7 @@ const frames=Math.max(1,Math.floor(Number(run.frames)||1));
 const events=decodeMoves(run.recording);
 moveRun={trackId:run.trackId,source:run.source,frames:frames,baseFrames:frames,recording:run.recording,carStyle:run.carStyle||"",cheatSpeed:run.cheatSpeed,cheatGrip:run.cheatGrip,src:run.src||"mine",events:events};
 return moveRun}
-window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source}:null;
+window.__ptMoveProbe=()=>moveRun?{trackId:moveRun.trackId,frames:moveRun.frames,events:moveRun.events.length,redecoded:decodeMoves(encodeMoves(moveRun.events)).length,source:moveRun.source,head:moveRun.events.slice(0,3).map((e=>e.f))}:null;
 // Rebuild the event list from the toggle lists, using the encoder's own rules (sorted per
 // key, two toggles on one frame cancel), so a moved frame cannot desync rows from the file.
 function normalizeMoves(){
@@ -798,7 +798,7 @@ throw new Error(tr("The edited run did not reach the finish."));
 return Math.max(1,Math.round(res.frames)-1)}
 
 /* ---------- Optimize: pull a track's best run, then tune its moves one by one ---------- */
-Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","runs/min":"Fahrten/min","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
+Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","runs/min":"Fahrten/min","The optimizer is still running \u2014 press Stop first.":"Der Optimierer l\u00e4uft noch \u2014 dr\u00fccke zuerst Stopp.","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
 // Moving a toggle changes the whole trajectory, so every try is a full simulation. The steps
 // grow only once a size stops finding anything: 1 frame first, as asked, then coarser sizes
 // so a goal far away is still reachable. 12 rounds per size stops a pair of toggles from
@@ -870,9 +870,10 @@ if(!tries.length)continue;
 // Both directions are timed from the same state, so they can run at the same time on two
 // workers. The earlier one wins, exactly like trying them one after the other, and a losing
 // direction is never written into the run, so it needs no undo.
-const results=await Promise.all(tries.map((function(t){
-const copy=ev.slice();copy[i]={f:t.frame,k:e.k,on:!!e.on};
-return simEvents(trackId,copy,token.best,t.worker)})));
+const simFor=(function(t){const copy=ev.slice();copy[i]={f:t.frame,k:e.k,on:!!e.on};return simEvents(trackId,copy,token.best,t.worker)});
+let results;
+if(pair[1]!==pair[0])results=await Promise.all(tries.map(simFor));
+else{results=[];for(const t of tries)results.push(await simFor(t))}
 recordSims(token,results.length);
 let kept=-1;
 for(let j=0;j<results.length;j++)if(results[j]&&results[j]<token.best){kept=j;break}
@@ -880,7 +881,11 @@ if(kept>=0){
 const t=tries[kept];
 e.f=t.frame;
 token.best=results[kept],token.log.push({frames:token.best,key:e.k,delta:t.dir*step,from:base}),base=token.best,gain=!0;
+// The editor and Submit read the run itself, so every kept move lands there at once -
+// otherwise a run looked at (or submitted) mid-search would show the new time with the old
+// moves.
 moveRun.frames=token.best;
+moveRun.events=ev.map((x=>({f:x.f,k:x.k,on:!!x.on})));
 onStep&&onStep(token,{key:e.k,delta:t.dir*step,kept:!0});
 if(token.goal&&token.best<=token.goal){token.met=!0;break outer}
 }else onStep&&onStep(token,null)}
@@ -1054,8 +1059,11 @@ finally{sim.disabled=!1}}));
 timeSet.addEventListener("click",(e=>{e.preventDefault();if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
 const v=Math.floor(Number(timeIn.value));if(!isFinite(v)||v<1)return say(tr("Enter a time in milliseconds."),!0);
 moveRun.frames=v,say(tr("Time set to ")+fmtTime(v),!0),paint()}));
-sub.addEventListener("click",(async e=>{e.preventDefault();
+sub.addEventListener("click",(async e=>{
+e.preventDefault();
 if(!moveRun)return say(tr("No run loaded \u2014 press Copy in the Copy run tab."),!0);
+// A search is still changing the moves; submitting now would post a half-tuned run.
+if(optSearch)return say(tr("The optimizer is still running \u2014 press Stop first."),!0);
 const p=ownProfile();if(!p)return say(tr("No profile selected \u2014 pick a driver slot first."),!0);
 if(!moveRun.trackId)return say(tr("No track selected."),!0);
 sub.disabled=!0,say(tr("Submitting\u2026"),!0);
