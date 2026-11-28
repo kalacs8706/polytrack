@@ -336,7 +336,10 @@
     "m.frames=self.__ptVerify.frames;m.finished=!!self.__ptVerify.hasFinished}}catch(e){}" +
     "return void 0===t?p.call(self,m):p.call(self,m,t)}})();\n";
 
+  let simSourceText = null;
+
   async function simSource() {
+    if (simSourceText) return simSourceText;
     const base = simUrl;
     const [worker, loader] = await Promise.all([
       fetch(base, { cache: "force-cache" }).then((r) => { if (!r.ok) throw new Error("simulation worker http " + r.status); return r.text(); }),
@@ -354,7 +357,8 @@
         "for(self.__ptVerify=$1;!$1.hasFinished&&$1.frames<$2;)",
       );
     if (patched === worker) throw new Error("simulation worker was not patched");
-    return SIM_PRELUDE + physics + "\n" + patched;
+    simSourceText = SIM_PRELUDE + physics + "\n" + patched;
+    return simSourceText;
   }
 
   let simWorker = null;
@@ -379,6 +383,38 @@
     });
     simMaking.then(() => { simMaking = null; }, () => {});
     return simMaking;
+  };
+
+  // The optimizer times both directions of one input change, so it wants two workers to run
+  // them at the same time. They are built from the same in-memory script as the single one.
+  let simPool = null;
+  let simPoolInit = null;
+
+  window.__ptVerifyWorkerPool = async function (count) {
+    const size = Math.max(1, Math.min(4, Math.floor(Number(count)) || 1));
+    if (!simUrl || !simInit) return [];
+    if (simPool && simPoolInit === simInit && simPool.length >= size) return simPool.slice(0, size);
+    const source = await simSource();
+    // The worker the single-verify path already built is reused, so only the extra copies are
+    // compiled and initialised here.
+    const shared = simWorker && simWorkerInit === simInit ? simWorker : null;
+    const workers = shared ? [shared] : [];
+    try {
+      while (workers.length < size) {
+        const worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+        worker.postMessage(simInit);
+        workers.push(worker);
+      }
+    } catch (err) {
+      for (const worker of workers) { if (worker !== shared) { try { worker.terminate(); } catch (e) {} } }
+      throw err;
+    }
+    if (simPool) for (const worker of simPool) {
+      if (worker !== shared && workers.indexOf(worker) < 0) { try { worker.terminate(); } catch (e) {} }
+    }
+    simPool = workers;
+    simPoolInit = simInit;
+    return workers.slice();
   };
 
   window.__ptRequire = function (id) {

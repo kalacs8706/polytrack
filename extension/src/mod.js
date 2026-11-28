@@ -773,9 +773,9 @@ const parsed=n(9117).A.fromExportString(text),track=parsed&&parsed.trackData;
 if(!track)throw new Error("could not parse track");
 const mv=n(6421).A.createMountainVertices(track.getBounds());
 return simTrackCache[trackId]={save:track.toSaveString(),mv:mv}}
-async function postVerify(trackId,recording,targetFrames,carId){
+async function postVerify(trackId,recording,targetFrames,carId,worker){
 const td=await simTrack(trackId);
-const w=await verifyWorker();if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
+const w=worker||await verifyWorker();if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
 const save=td.save,mv=td.mv,id=carId||3000+Math.floor(900*Math.random());
 return new Promise((function(resolve,reject){
 const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),6e4);
@@ -798,7 +798,7 @@ throw new Error(tr("The edited run did not reach the finish."));
 return Math.max(1,Math.round(res.frames)-1)}
 
 /* ---------- Optimize: pull a track's best run, then tune its moves one by one ---------- */
-Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
+Object.assign(DE,{"Optimize":"Optimieren","Track":"Strecke","Goal (s)":"Ziel (s)","Start":"Start","Stop":"Stopp","best":"Bestzeit","goal":"Ziel","improvements":"Verbesserungen","simulations":"Simulationen","runs/min":"Fahrten/min","Own server":"Eigener Server","Official":"Offiziell","Select a track first.":"W\u00e4hle zuerst eine Strecke.","No track file for this track \u2014 open the track in the game once.":"Keine Streckendatei f\u00fcr diese Strecke \u2014 \u00f6ffne die Strecke einmal im Spiel.","Goal must be above 0 seconds.":"Das Ziel muss \u00fcber 0 Sekunden liegen.","Loading the best run\u2026":"Beste Fahrt wird geladen\u2026","Optimizing\u2026":"Wird optimiert\u2026","Optimization failed: ":"Optimierung fehlgeschlagen: ","Goal reached \u2014 ":"Ziel erreicht \u2014 ","Stopped at ":"Gestoppt bei ","No improvement left \u2014 stopped at ":"Keine Verbesserung mehr \u2014 gestoppt bei ","No simulation worker yet \u2014 start a race once, then the game has a physics worker.":"Noch kein Simulations-Worker \u2014 starte einmal ein Rennen, dann hat das Spiel einen Physik-Worker.","This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again.":"Diese Fahrt l\u00e4sst sich mit der aktuell laufenden Physik nicht nachfahren. Setze Autogeschwindigkeit und Grip im Cheats-Tab zur\u00fcck und versuche es erneut.","The optimizer loads the fastest run of the selected board, then moves one input toggle at a time and simulates the run: a change that makes it faster is kept, one that makes it slower or stops it finishing is undone. It stops at the goal or when no single move helps any more, and leaves the result in the Move editor.":"Der Optimierer l\u00e4dt die schnellste Fahrt der gew\u00e4hlten Rangliste, verschiebt dann einen Eingabe-Wechsel nach dem anderen und simuliert die Fahrt: was schneller macht, bleibt, was langsamer macht oder das Ziel verfehlt, wird zur\u00fcckgenommen. Er stoppt beim Ziel oder wenn keine einzelne Bewegung mehr hilft, und l\u00e4sst das Ergebnis im Fahrt-Editor."});
 // Moving a toggle changes the whole trajectory, so every try is a full simulation. The steps
 // grow only once a size stops finding anything: 1 frame first, as asked, then coarser sizes
 // so a goal far away is still reachable. 12 rounds per size stops a pair of toggles from
@@ -808,28 +808,46 @@ let optTrackId="",optSearch=null;
 // The worker stops at the frame passed as the target, so a try is only run until it is slower
 // than the best so far: a move that makes the run slower (or crashes it) costs no more than
 // a move that helps.
-async function simEvents(trackId,events,cap){
-const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(cap)));
+// The extension can hand over several workers; the self-hosted build only has the one the game
+// created, and its messages are answered in order, so both directions still work there.
+async function simWorkers(){
+const w=await verifyWorker();
+// Two workers only pay off with spare cores; on a small machine the extra copy would just
+// compete with the one already there.
+const cores=(function(){try{return +navigator.hardwareConcurrency||2}catch(e){return 2}})();
+if(cores>=4&&"function"==typeof window.__ptVerifyWorkerPool){
+try{const pool=await window.__ptVerifyWorkerPool(2);if(pool&&pool.length)return pool}catch(e){}}
+return w&&"function"==typeof w.postMessage?[w]:[]}
+async function simEvents(trackId,events,cap,worker){
+const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(cap)),undefined,worker);
 if(!res||!res.finished||"number"!=typeof res.frames)return 0;
 const f=Math.max(1,Math.round(res.frames)-1);
 return f<cap?f:0}
 // Runs the stored moves unchanged to see which frame the physics finishes on. The worker
 // counts the step the car crossed the line in, one above the frame the leaderboard stores, so
 // the measurement may sit a frame either side of the listed time.
-async function measureEvents(trackId,events,frames){
-const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(frames)+2));
+async function measureEvents(trackId,events,frames,worker){
+const res=await postVerify(trackId,encodeMoves(events),Math.max(2,Math.floor(frames)+2),undefined,worker);
 if(!res||!res.finished||"number"!=typeof res.frames)return 0;
 return Math.max(1,Math.round(res.frames)-1)}
+// Runs per minute, smoothed over a couple of seconds so a change in pace shows up soon.
+function recordSims(token,count){
+token.sims+=count;
+const now=Date.now(),r=token.rate,dt=now-r.last;
+if(dt>=2e3){const inst=r.n*6e4/dt;r.rate=r.rate?r.rate*.6+inst*.4:inst,r.n=0,r.last=now}
+r.n+=count}
 async function optimizeRun(trackId,goalFrames,onStep){
 const ev=moveRun.events.map((e=>({f:e.f,k:e.k,on:!!e.on})));
-const w=await verifyWorker();
-if(!w||"function"!=typeof w.postMessage)throw new Error(tr("No simulation worker yet \u2014 start a race once, then the game has a physics worker."));
-const token={stop:!1,met:!1,sims:0,best:Math.max(1,Math.floor(moveRun.frames)),goal:goalFrames||0,start:Date.now(),log:[]};
+const token={stop:!1,met:!1,sims:0,best:Math.max(1,Math.floor(moveRun.frames)),goal:goalFrames||0,start:Date.now(),log:[],rate:{last:Date.now(),n:0,rate:0}};
 optSearch=token;
 try{
 onStep&&onStep(token,null);
-const first=await measureEvents(trackId,ev,token.best);
-token.sims++;
+// Stop works while the workers are still being built.
+const workers=await simWorkers();
+if(!workers.length)throw new Error(tr("No simulation worker yet \u2014 start a race once, then the game has a physics worker."));
+const pair=workers.length>1?workers:[workers[0],workers[0]];
+const first=await measureEvents(trackId,ev,token.best,workers[0]);
+recordSims(token,1);
 if(!first)throw new Error(tr("This run does not reproduce with the physics the game is running now. Reset the car speed and grip in the Cheats tab and try again."));
 token.best=first,moveRun.frames=first;
 onStep&&onStep(token,null);
@@ -842,23 +860,30 @@ for(const step of OPT_STEPS){
 for(let round=0;round<12;round++){
 let gain=!1;
 for(let i=0;i<ev.length;i++){
-const e=ev[i];
-for(const dir of [-1,1]){
 if(token.stop)break outer;
-const old=e.f,next=Math.max(0,Math.round(old+dir*step));
-if(next===old)continue;
-e.f=next;
-const f=await simEvents(trackId,ev,token.best);
-token.sims++;
-if(f&&f<token.best){
-token.best=f,token.log.push({frames:f,key:e.k,delta:dir*step,from:base}),base=f,gain=!0;
-moveRun.frames=f;
-onStep&&onStep(token,{key:e.k,delta:dir*step,kept:!0});
-if(token.goal&&f<=token.goal){token.met=!0;break outer}
-}else{
-// Slower, or the car no longer reaches the finish: put the move back.
-e.f=old;
-onStep&&onStep(token,{key:e.k,delta:dir*step,kept:!1})}}}
+const e=ev[i];
+const back=Math.max(0,Math.round(e.f-step)),fwd=Math.max(0,Math.round(e.f+step));
+const tries=[];
+if(back!==e.f)tries.push({dir:-1,frame:back,worker:pair[0]});
+if(fwd!==e.f)tries.push({dir:1,frame:fwd,worker:pair[tries.length]||pair[0]});
+if(!tries.length)continue;
+// Both directions are timed from the same state, so they can run at the same time on two
+// workers. The earlier one wins, exactly like trying them one after the other, and a losing
+// direction is never written into the run, so it needs no undo.
+const results=await Promise.all(tries.map((function(t){
+const copy=ev.slice();copy[i]={f:t.frame,k:e.k,on:!!e.on};
+return simEvents(trackId,copy,token.best,t.worker)})));
+recordSims(token,results.length);
+let kept=-1;
+for(let j=0;j<results.length;j++)if(results[j]&&results[j]<token.best){kept=j;break}
+if(kept>=0){
+const t=tries[kept];
+e.f=t.frame;
+token.best=results[kept],token.log.push({frames:token.best,key:e.k,delta:t.dir*step,from:base}),base=token.best,gain=!0;
+moveRun.frames=token.best;
+onStep&&onStep(token,{key:e.k,delta:t.dir*step,kept:!0});
+if(token.goal&&token.best<=token.goal){token.met=!0;break outer}
+}else onStep&&onStep(token,null)}
 if(!gain)break}}}
 }finally{
 optSearch=null;
@@ -874,12 +899,19 @@ if(curTrack.id)add(curTrack.id);
 for(const id in OFFICIAL)add(id,OFFICIAL[id].name||trackLabel(id));
 return out}
 async function bestRunEntry(trackId){
-const res=await fetch(copyBase()+"/v6/leaderboard?version=0.6.3&trackId="+encodeURIComponent(trackId)+"&skip=0&amount=100&onlyVerified=false",{cache:"no-store"});
+const pick=(async function(onlyVerified){
+const res=await fetch(copyBase()+"/v6/leaderboard?version=0.6.3&trackId="+encodeURIComponent(trackId)+"&skip=0&amount=100&onlyVerified="+(onlyVerified?"true":"false"),{cache:"no-store"});
 if(!res.ok)throw new Error("http "+res.status);
 const d=await res.json(),rows=(d&&d.entries)||[];
 let best=null,bestF=0;
 for(const en of rows){const f=Math.floor(Number(en.frames))||0;if(f>0&&(!best||f<bestF))best=en,bestF=f}
-return best}
+return best});
+// A board can list runs that no longer reproduce (edited or cheated with a faster time than
+// the physics allows). The server's verified runs are the ones it replayed itself, so the
+// fastest of those is what the optimizer starts from.
+let best=null;
+try{best=await pick(!0)}catch(e){}
+return best||pick(!1)}
 async function loadBestRunFor(trackId){
 const en=await bestRunEntry(trackId);
 if(!en)throw new Error(tr("No leaderboard entries for this track yet."));
@@ -933,17 +965,21 @@ startBtn.disabled=!0,stopBtn.disabled=!1,list.textContent="";
 try{
 if(!moveRun||moveRun.trackId!==id||moveRun.src!==copySrc){say(tr("Loading the best run\u2026"),!0);await loadBestRunFor(id)}
 say(tr("Optimizing\u2026"),!0),paintBest();
+let lastSay=0;
 const token=await optimizeRun(id,goal,(function(tk,step){
-const secs=Math.max(0,Math.round((Date.now()-tk.start)/1e3));
-say(tr("Simulated ")+tk.sims+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
+const now=Date.now();
 if(step&&step.kept){
 const row=el("div","pt-replay"),top=el("div","pt-rtop");
 top.appendChild(el("span","pt-rname",step.key+" "+(step.delta>0?"+":"")+step.delta+" ms"));
 top.appendChild(el("span","pt-rtime",fmtTime(tk.best)));
 row.appendChild(top),list.appendChild(row),list.scrollTop=list.scrollHeight,paintBest()}
+else if(now-lastSay<250)return;
+lastSay=now;
+const secs=Math.max(0,Math.round((now-tk.start)/1e3));
+say(tr("Simulated ")+tk.sims+" \u00b7 "+Math.round(tk.rate.rate||0)+" "+tr("runs/min")+" \u00b7 "+tr("best")+" "+fmtTime(tk.best)+(tk.goal?" \u00b7 "+tr("goal")+" "+fmtTime(tk.goal):"")+" \u00b7 "+secs+" s",!0);
 }));
 const secs=Math.max(1,Math.round((Date.now()-token.start)/1e3));
-say((token.met?tr("Goal reached \u2014 "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+secs+" s",!0);
+say((token.met?tr("Goal reached \u2014 "):token.stop?tr("Stopped at "):tr("No improvement left \u2014 stopped at "))+fmtTime(token.best)+" \u00b7 "+token.log.length+" "+tr("improvements")+" \u00b7 "+token.sims+" "+tr("simulations")+" \u00b7 "+Math.round(token.sims/(secs/60))+" "+tr("runs/min")+" \u00b7 "+secs+" s",!0);
 }catch(err){say(tr("Optimization failed: ")+((err&&err.message)||err),!0)}
 finally{startBtn.disabled=!1,stopBtn.disabled=!0,paintBest();
 try{tabHooks["Move editor"]&&tabHooks["Move editor"]()}catch(e){}}
@@ -958,7 +994,7 @@ const o=document.createElement("option");o.value=id,o.textContent=trackLabel(id)
 if(moveRun&&moveRun.trackId&&sel.value!==moveRun.trackId)sel.value=moveRun.trackId;
 optTrackId=sel.value||"",paintBest()};
 paintBest()}
-window.__ptOptProbe=()=>optSearch?{track:optTrackId,sims:optSearch.sims,best:optSearch.best,goal:optSearch.goal,log:optSearch.log.length}:null;
+window.__ptOptProbe=()=>optSearch?{track:optTrackId,sims:optSearch.sims,best:optSearch.best,goal:optSearch.goal,log:optSearch.log.length,rate:Math.round(optSearch.rate.rate||0)}:null;
 function buildMoveTab(pane){
 const head=el("div","pt-row"),count=el("span","pt-count",""),undo=el("button","pt-mini","Undo");undo.type="button";
 head.appendChild(count),head.appendChild(undo),pane.appendChild(head);
