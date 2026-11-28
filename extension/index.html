@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PolyMod sites</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; }
+  body {
+    width: 340px;
+    max-height: 520px;
+    overflow: auto;
+    padding: 14px 14px 12px;
+    box-sizing: border-box;
+    background: #112052;
+    color: #fff;
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { margin: 0 0 2px; font-size: 13px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
+  p { margin: 0 0 10px; font-size: 12px; opacity: .72; }
+  form { display: flex; gap: 6px; margin: 0 0 8px; }
+  input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 4px;
+    background: rgba(0,0,0,.28);
+    color: #fff;
+    font: inherit;
+  }
+  input[type="text"]:focus { outline: 0; border-color: rgba(127,182,255,.8); }
+  button {
+    padding: 7px 11px;
+    border: 0;
+    border-radius: 4px;
+    background: rgba(255,255,255,.16);
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { background: rgba(255,255,255,.26); }
+  button:disabled { opacity: .45; cursor: default; }
+  #status { min-height: 16px; margin: 0 0 6px; font-size: 11px; line-height: 1.35; opacity: 0; transition: opacity .15s; }
+  #status.on { opacity: .9; }
+  #status.bad { color: #ffb4a1; }
+  ul { list-style: none; margin: 0 0 10px; padding: 0; }
+  li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.09); }
+  li:last-child { border-bottom: 0; }
+  .site { flex: 1 1 auto; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { margin-left: 4px; font-size: 10px; opacity: .55; }
+  .meta.warn { color: #ffc39a; opacity: .9; }
+  .hint { margin: 0; font-size: 11px; opacity: .55; }
+  .empty { padding: 4px 0 8px; font-size: 12px; opacity: .55; }
+</style>
+</head>
+<body>
+<h1>PolyMod sites</h1>
+<p>The mod is built into PolyTrack at app-polytrack.kodub.com. Add any other site that runs the game and it starts there too, as the page loads.</p>
+<form id="add-form" autocomplete="off">
+  <input id="site" type="text" placeholder="example.com or https://example.com/game" spellcheck="false">
+  <button type="submit">Add</button>
+</form>
+<div id="status" role="status"></div>
+<ul id="sites"></ul>
+<p class="hint">Chrome asks for access to each site when you add it; all ports of that host are covered. Reload a tab that is already open so the mod starts with the page again. A site has to load the real PolyTrack game for the overlay to have anything to attach to.</p>
+<script src="whitelist.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
