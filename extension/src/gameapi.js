@@ -1,14 +1,20 @@
 // Runs in the page (MAIN world) before the mod.
 //
-// The mod reaches four of the game's webpack modules through its bundle-scope `n(id)`: the
-// replay codec (1754), the recording decoder (6551), pako (3075) and the track exporter
-// (9117/6421). On the unmodified game there is no `n`, so this file provides one backed by
-// implementations of exactly what the Copy run / Move editor path uses:
+// The mod reaches game webpack modules through its bundle-scope `n(id)`: the replay codec
+// (1754), the recording decoder (6551), pako (3075), the track data class (9117), track
+// meshes (6421) and the renderer class (9437). On the unmodified game there is no `n`, so
+// this file provides one. Two sources feed it:
 //
-//   recording = base64url( zlib( five uint24-delta lists: up, right, down, left, reset ) )
+//  1. The recording codec is reimplemented here, because the game builds it from raw data:
+//     recording = base64url( zlib( five uint24-delta lists: up, right, down, left, reset ) )
+//     Verified byte-for-byte against zlib on live official recordings. Encoding writes the
+//     same payload as uncompressed (stored) deflate blocks, which any inflater reads back.
 //
-// Verified byte-for-byte against zlib on live official recordings. Encoding writes the same
-// payload as uncompressed (stored) deflate blocks, which any inflater reads back.
+//  2. Every other module (9117 track data, 6421, 9437, ...) is the page's own, taken from
+//     the game's webpack runtime. There is no way to reimplement 9117 by hand: it is the
+//     whole track model behind fromExportString. Instead this file hooks the chunk array
+//     (`self.webpackChunk`) before the game's bundles run, which recovers the real
+//     `require` and with it every module of the build.
 (function () {
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const KEYS = ["up", "right", "down", "left", "reset"];
@@ -241,15 +247,139 @@
     this.err = null;
   };
 
+  // Reimplementations used for the ids above; they win over the page's own modules so the
+  // verified recording behaviour is unchanged.
   const modules = {
     1754: { A: Codec },
     6551: { D: (recording) => inflateZlib(b64decode(recording)) },
     3075: { Ay: { Inflate } },
   };
 
+  /* ---------- the page's own webpack runtime ---------- */
+  // At document_start the game's bundles have not run yet. They start with
+  //
+  //   n = self.webpackChunk = self.webpackChunk || [];
+  //   n.forEach(callback); n.push = callback.bind(null, n.push.bind(n));
+  //
+  // and every chunk image (535.bundle.js, ...) then arrives as
+  // `n.push([[chunkIds], moduleTable, runtime?])`. Handing them an array whose `push` is an
+  // accessor means the runtime's own callback lands in our setter and every module table
+  // passes through our getter, before webpack installs it.
+  const parts = Object.create(null);
+  let realRequire = null;
+
+  function adopt(table) {
+    if (!table || typeof table !== "object") return;
+    for (const id in table) {
+      const factory = table[id];
+      if (typeof factory !== "function" || factory.__ptWrapped) continue;
+      parts[id] = factory;
+      if (realRequire) continue;
+      const wrapped = function (module, exports, require) {
+        if (!realRequire && typeof require === "function") realRequire = require;
+        return factory.apply(this, arguments);
+      };
+      wrapped.__ptWrapped = 1;
+      table[id] = wrapped;
+    }
+  }
+
+  // Fallback require over the collected chunk tables, for a module the real require cannot
+  // reach (a different runtime layout, or a build whose chunks never pass through us).
+  const local = Object.create(null);
+  function localRequire(id) {
+    const hit = local[id];
+    if (hit) return hit.exports;
+    const factory = parts[id];
+    if (typeof factory !== "function") throw new Error("game module " + id + " is not available in the extension");
+    const module = { id: id, exports: {}, loaded: false };
+    local[id] = module;
+    try {
+      factory(module, module.exports, localRequire);
+    } catch (err) {
+      delete local[id];
+      throw err;
+    }
+    module.loaded = true;
+    return module.exports;
+  }
+  local.c = local;
+  local.m = parts;
+  local.o = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
+  local.d = (exports, definition) => {
+    for (const key in definition) {
+      if (!Object.prototype.hasOwnProperty.call(exports, key)) {
+        Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+      }
+    }
+  };
+  local.n = (module) => {
+    const getter = module && module.__esModule ? () => module["default"] : () => module;
+    local.d(getter, { a: getter });
+    return getter;
+  };
+  local.r = (exports) => {
+    Object.defineProperty(exports, "__esModule", { value: true });
+  };
+  local.g = typeof globalThis !== "undefined" ? globalThis : window;
+
+  (function hookChunks() {
+    try {
+      const current = self.webpackChunk;
+      if (current && current.__ptHook) return;
+      const chunks = [];
+      let runtimePush = null;
+      const dispatch = function () {
+        const arg = arguments[0];
+        if (arg && typeof arg === "object") {
+          adopt(arg[1]);
+          if (typeof arg[2] === "function") {
+            const run = arg[2];
+            arg[2] = function (require) {
+              if (!realRequire && typeof require === "function") realRequire = require;
+              return run.apply(this, arguments);
+            };
+          }
+        }
+        if (runtimePush) return runtimePush.apply(null, arguments);
+        return Array.prototype.push.apply(this, arguments);
+      };
+      Object.defineProperty(chunks, "push", {
+        configurable: true,
+        get() {
+          return dispatch;
+        },
+        set(fn) {
+          runtimePush = fn;
+        },
+      });
+      chunks.__ptHook = 1;
+      self.webpackChunk = chunks;
+      // This build keeps its main module table inside the runtime closure, so it never
+      // arrives as a chunk. The runtime first replays the entries already in the array
+      // (`n.forEach(callback)`), calling each entry's optional runtime callback with its own
+      // require, so one seeded entry is all it takes to recover that require. The chunk id
+      // is arbitrary and matches no chunk, and the table is empty, so webpack does nothing
+      // with it beyond the callback.
+      Array.prototype.push.call(chunks, [
+        [999999991],
+        {},
+        function (require) {
+          if (!realRequire && typeof require === "function") realRequire = require;
+        },
+      ]);
+    } catch (err) {}
+  })();
+
   window.__ptRequire = function (id) {
     const found = modules[id];
-    if (!found) throw new Error("game module " + id + " is not available in the extension");
-    return found;
+    if (found) return found;
+    if (realRequire) {
+      try {
+        return realRequire(id);
+      } catch (err) {}
+    }
+    return localRequire(id);
   };
+  window.__ptWebpackProbe = () => ({ hooked: !!(self.webpackChunk && self.webpackChunk.__ptHook), require: !!realRequire, seeded: !!(self.webpackChunk && self.webpackChunk.length), modules: Object.keys(parts).length });
 })();
