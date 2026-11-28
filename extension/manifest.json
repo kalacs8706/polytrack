@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "PolyMod for PolyTrack",
+  "version": "1.0.0",
+  "description": "Injects the PolyMod overlay (camera, cheats, HUD, replays, leaderboard tools) into the unmodified PolyTrack web game.",
+  "minimum_chrome_version": "111",
+  "content_scripts": [
+    {
+      "matches": ["https://app-polytrack.kodub.com/*"],
+      "js": ["src/compat.js", "src/api-base.js", "src/mod.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ]
+}
