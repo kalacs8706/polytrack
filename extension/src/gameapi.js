@@ -289,6 +289,98 @@
     } catch (err) {}
   })();
 
+  /* ---------- simulation worker ---------- */
+  // The official worker answers a verify with `{messageType, carId, result}` only: it reports
+  // whether the run finished on exactly the requested frame, never the frame it finished on.
+  // The mod needs that frame to time edited moves, so the page's own worker script is
+  // fetched, patched in memory and started from a blob. Nothing is shipped with the
+  // extension: the script is the game's, served by the game, and the patch only exposes the
+  // loop's final frame in the reply. The self-hosted build has no such helper and keeps
+  // using the worker it ships.
+  let simUrl = null;
+  let simInit = null;
+
+  (function hookWorker() {
+    try {
+      const Native = self.Worker;
+      if (!Native || Native.__ptWorker) return;
+      const Wrapped = function (url, options) {
+        try {
+          const abs = new URL(String(url), location.href).href;
+          if (!/^blob:/i.test(abs)) simUrl = abs;
+        } catch (e) {}
+        return new Native(url, options);
+      };
+      Wrapped.prototype = Native.prototype;
+      Wrapped.__ptWorker = 1;
+      self.Worker = Wrapped;
+      // The game initialises its worker with one message that carries the track parts and the
+      // car shape; the patched worker needs the same setup, so the last one seen is kept.
+      const post = Native.prototype.postMessage;
+      Native.prototype.postMessage = function (message, transfer) {
+        try {
+          if (message && "object" === typeof message && 0 === message.messageType) {
+            const copy = {};
+            for (const key in message) copy[key] = message[key];
+            simInit = copy;
+          }
+        } catch (e) {}
+        return arguments.length > 1 ? post.call(this, message, transfer) : post.call(this, message);
+      };
+    } catch (e) {}
+  })();
+
+  const SIM_PRELUDE =
+    "(function(){var p=self.postMessage;" +
+    "self.postMessage=function(m,t){try{if(m&&8===m.messageType&&self.__ptVerify&&void 0===m.frames){" +
+    "m.frames=self.__ptVerify.frames;m.finished=!!self.__ptVerify.hasFinished}}catch(e){}" +
+    "return void 0===t?p.call(self,m):p.call(self,m,t)}})();\n";
+
+  async function simSource() {
+    const base = simUrl;
+    const [worker, loader] = await Promise.all([
+      fetch(base, { cache: "force-cache" }).then((r) => { if (!r.ok) throw new Error("simulation worker http " + r.status); return r.text(); }),
+      fetch(new URL("lib/polytrack_physics.js", base).href, { cache: "force-cache" })
+        .then((r) => { if (!r.ok) throw new Error("physics loader http " + r.status); return r.text(); }),
+    ]);
+    // The loader resolves its wasm next to the worker script, and a blob URL has no
+    // directory, so it is inlined and handed the worker's real URL instead of imported.
+    const physics = loader.split("self.location.href").join(JSON.stringify(base));
+    const patched = worker
+      // `0`, not nothing: the call sits in a comma expression (`…),importScripts(…);`).
+      .replace(/importScripts\(\s*["']lib\/polytrack_physics\.js["']\s*\)/, "0")
+      .replace(
+        /for\(;!([A-Za-z_$][\w$]*)\.hasFinished&&\1\.frames<([A-Za-z_$][\w$]*);\)/,
+        "for(self.__ptVerify=$1;!$1.hasFinished&&$1.frames<$2;)",
+      );
+    if (patched === worker) throw new Error("simulation worker was not patched");
+    return SIM_PRELUDE + physics + "\n" + patched;
+  }
+
+  let simWorker = null;
+  let simWorkerInit = null;
+  let simMaking = null;
+
+  window.__ptVerifyWorkerFor = function () {
+    if (!simUrl || !simInit) return Promise.resolve(null);
+    if (simWorker && simWorkerInit === simInit) return Promise.resolve(simWorker);
+    if (simMaking) return simMaking;
+    simMaking = (async () => {
+      const source = await simSource();
+      const worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+      worker.postMessage(simInit);
+      if (simWorker) { try { simWorker.terminate(); } catch (e) {} }
+      simWorker = worker;
+      simWorkerInit = simInit;
+      return worker;
+    })().catch((err) => {
+      simMaking = null;
+      throw err;
+    });
+    simMaking.then(() => { simMaking = null; }, () => {});
+    return simMaking;
+  };
+
   window.__ptRequire = function (id) {
     const found = modules[id];
     if (found) return found;

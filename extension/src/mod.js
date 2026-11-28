@@ -751,13 +751,19 @@ throw new Error("no track file for this track")}
 // The simulation worker's physics world is built from the track the game has loaded, so a
 // run can only be timed while its own track is the loaded one - which is what the copy list
 // always shows.
+// The game's own worker is used where it reports the frame a run finished on (the
+// self-hosted build ships one that does); the extension hands over a worker built from the
+// page's script, patched to report it too, so Simulate can time edited moves either way.
+async function verifyWorker(){
+if("function"!=typeof window.__ptVerifyWorkerFor)return window.__ptSimWorker;
+try{return (await window.__ptVerifyWorkerFor())||window.__ptSimWorker}catch(e){return window.__ptSimWorker}}
 async function postVerify(trackId,recording,targetFrames,carId){
 if(!curTrack||curTrack.id!==trackId)throw new Error(tr("Load this run's track first \u2014 the simulation runs on the track the game has loaded."));
 const text=await trackTextFor(trackId);
 const parsed=n(9117).A.fromExportString(text),track=parsed&&parsed.trackData;
 if(!track)throw new Error("could not parse track");
 const mv=n(6421).A.createMountainVertices(track.getBounds());
-const w=window.__ptSimWorker;if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
+const w=await verifyWorker();if(!w||"function"!=typeof w.postMessage)throw new Error("simulation worker not ready");
 const save=track.toSaveString(),id=carId||3000+Math.floor(900*Math.random());
 return new Promise((function(resolve,reject){
 const to=setTimeout((function(){w.removeEventListener("message",on),reject(new Error("simulation timed out"))}),6e4);
