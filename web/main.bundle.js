@@ -53,8 +53,8 @@ function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)retu
 const CSS=".pt-logo{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .25s ease-out}\n"+
 ".pt-logo.pt-shown{opacity:1}\n"+
 ".pt-logo>span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:ForcedSquare,Arial,sans-serif;font-size:clamp(46px,15.2vw,200px);line-height:1;letter-spacing:.01em;white-space:nowrap}\n"+
-".pt-logo>.pt-logo-stroke{color:#b3c1ff;-webkit-text-stroke:12px #b3c1ff}\n"+
-".pt-logo>.pt-logo-fill{color:#112052}";
+".pt-logo>.pt-logo-stroke{color:#b3c1ff;-webkit-text-stroke:12px #112052}\n"+
+".pt-logo>.pt-logo-fill{color:#b3c1ff}";
 // At document_start there is no head to put a stylesheet in yet, so this runs when the logo
 // shows up (and again on DOMContentLoaded).
 function injectCss(){
