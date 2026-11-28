@@ -7,7 +7,7 @@
   "content_scripts": [
     {
       "matches": ["https://app-polytrack.kodub.com/*"],
-      "js": ["src/compat.js", "src/api-base.js", "src/mod.js"],
+      "js": ["src/compat.js", "src/gameapi.js", "src/api-base.js", "src/mod.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true
