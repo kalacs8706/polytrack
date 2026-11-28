@@ -12,9 +12,9 @@
 //
 //  2. Every other module (9117 track data, 6421, 9437, ...) is the page's own, taken from
 //     the game's webpack runtime. There is no way to reimplement 9117 by hand: it is the
-//     whole track model behind fromExportString. Instead this file hooks the chunk array
-//     (`self.webpackChunk`) before the game's bundles run, which recovers the real
-//     `require` and with it every module of the build.
+//     whole track model behind fromExportString. Instead this file seeds the chunk array
+//     (`self.webpackChunk`) before the game's bundles run, which makes webpack hand over its
+//     real `require` and with it every module of the build.
 (function () {
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const KEYS = ["up", "right", "down", "left", "reset"];
@@ -256,53 +256,28 @@
   };
 
   /* ---------- the page's own webpack runtime ---------- */
-  // At document_start the game's bundles have not run yet. They start with
+  // At document_start the game's bundles have not run yet. Their runtime starts with
   //
   //   n = self.webpackChunk = self.webpackChunk || [];
-  //   n.forEach(callback); n.push = callback.bind(null, n.push.bind(n));
+  //   n.forEach(t.bind(null, 0)); n.push = t.bind(null, n.push.bind(n));
   //
-  // and every chunk image (535.bundle.js, ...) then arrives as
-  // `n.push([[chunkIds], moduleTable, runtime?])`. Handing them an array whose `push` is an
-  // accessor means the runtime's own callback lands in our setter instead of taking the
-  // array over.
+  // where `t` installs a chunk's modules and then calls the chunk's optional third element
+  // (its runtime callback) with webpack's own require. This build keeps its main module
+  // table inside the runtime closure, so it never arrives as a chunk - but the replay above
+  // runs whatever is already in the array, so one seeded entry is all it takes to recover
+  // that require. The chunk id is arbitrary and matches no chunk and the table is empty, so
+  // webpack does nothing with it beyond the callback.
+  //
+  // The array itself is left alone: intercepting `push` breaks webpack's own callback, which
+  // pushes the same entry a second time and would recurse into the interceptor forever.
   let realRequire = null;
 
-  (function hookChunks() {
+  (function seedChunks() {
     try {
       const current = self.webpackChunk;
-      if (current && current.__ptHook) return;
-      const chunks = [];
-      let runtimePush = null;
-      const dispatch = function () {
-        // A chunk entry may carry a runtime callback, which webpack hands its own require.
-        const arg = arguments[0];
-        if (arg && typeof arg === "object" && typeof arg[2] === "function") {
-          const run = arg[2];
-          arg[2] = function (require) {
-            if (!realRequire && typeof require === "function") realRequire = require;
-            return run.apply(this, arguments);
-          };
-        }
-        if (runtimePush) return runtimePush.apply(null, arguments);
-        return Array.prototype.push.apply(this, arguments);
-      };
-      Object.defineProperty(chunks, "push", {
-        configurable: true,
-        get() {
-          return dispatch;
-        },
-        set(fn) {
-          runtimePush = fn;
-        },
-      });
-      chunks.__ptHook = 1;
-      self.webpackChunk = chunks;
-      // This build keeps its main module table inside the runtime closure, so it never
-      // arrives as a chunk. The runtime first replays the entries already in the array
-      // (`n.forEach(callback)`), calling each entry's optional runtime callback with its own
-      // require, so one seeded entry is all it takes to recover that require. The chunk id
-      // is arbitrary and matches no chunk, and the table is empty, so webpack does nothing
-      // with it beyond the callback.
+      if (current && current.__ptSeed) return;
+      const chunks = Array.isArray(current) ? current : [];
+      chunks.__ptSeed = 1;
       Array.prototype.push.call(chunks, [
         [999999991],
         {},
@@ -310,6 +285,7 @@
           if (!realRequire && typeof require === "function") realRequire = require;
         },
       ]);
+      self.webpackChunk = chunks;
     } catch (err) {}
   })();
 
@@ -319,5 +295,5 @@
     if (realRequire) return realRequire(id);
     throw new Error("game module " + id + " is not available in the extension");
   };
-  window.__ptWebpackProbe = () => ({ hooked: !!(self.webpackChunk && self.webpackChunk.__ptHook), require: !!realRequire, seeded: !!(self.webpackChunk && self.webpackChunk.length) });
+  window.__ptWebpackProbe = () => ({ seeded: !!(self.webpackChunk && self.webpackChunk.__ptSeed), require: !!realRequire, chunks: self.webpackChunk ? self.webpackChunk.length : 0 });
 })();
