@@ -428,7 +428,7 @@ para("Back up your profile before testing anything new. PolyMod stores its setti
 
 /* ---------- cheats: apply, admin, leaderboard cheat badges ---------- */
 const APIBASE=(function(){try{return String(window.__ptMPBase||"").replace(/\/+$/,"")}catch(e){return""}})();
-Object.assign(DE,{"Admin":"Admin","Admin password":"Admin-Passwort","Apply":"Anwenden","Sign out":"Abmelden","Refresh":"Aktualisieren","Delete this record":"Diesen Eintrag l\u00f6schen","Delete all on this track":"Alle Eintr\u00e4ge dieser Strecke l\u00f6schen","Delete every record on this track?":"Wirklich alle Eintr\u00e4ge dieser Strecke l\u00f6schen?","records":"Eintr\u00e4ge","clean":"sauber","Cheated":"Geschummelt","speed":"Tempo","grip":"Grip","Signed in.":"Angemeldet.","Enter the admin password.":"Admin-Passwort eingeben.","No records yet.":"Noch keine Eintr\u00e4ge.","Delete failed: ":"L\u00f6schen fehlgeschlagen: ","Admin request failed: ":"Admin-Anfrage fehlgeschlagen: ","Applied.":"Angewendet.","Restart game":"Spiel neu starten","The admin tools need the self-hosted server (web build only).":"Die Admin-Werkzeuge brauchen den eigenen Server (nur Web-Build).","Grip applies immediately. Car speed sits inside the physics module, which is built when a race starts, so it applies from the next race \u2014 Restart game applies it right now.":"Grip wirkt sofort. Das Tempo steckt im Physikmodul, das beim Rennstart gebaut wird, es greift also ab dem n\u00e4chsten Rennen \u2014 \u201eSpiel neu starten\u201c wendet es sofort an.","Replay this run with the settings it was driven with":"Diese Fahrt mit den damaligen Einstellungen abspielen"});
+Object.assign(DE,{"Admin":"Admin","Admin password":"Admin-Passwort","Apply":"Anwenden","Sign out":"Abmelden","Refresh":"Aktualisieren","Delete this record":"Diesen Eintrag l\u00f6schen","Delete all on this track":"Alle Eintr\u00e4ge dieser Strecke l\u00f6schen","Delete every record on this track?":"Wirklich alle Eintr\u00e4ge dieser Strecke l\u00f6schen?","records":"Eintr\u00e4ge","clean":"sauber","Cheated":"Geschummelt","speed":"Tempo","grip":"Grip","Signed in.":"Angemeldet.","Enter the admin password.":"Admin-Passwort eingeben.","No records yet.":"Noch keine Eintr\u00e4ge.","Delete failed: ":"L\u00f6schen fehlgeschlagen: ","Admin request failed: ":"Admin-Anfrage fehlgeschlagen: ","Session expired \u2014 sign in again in the Admin tab.":"Sitzung abgelaufen \u2014 melde dich im Admin-Tab neu an.","Wrong password.":"Falsches Passwort.","Applied.":"Angewendet.","Restart game":"Spiel neu starten","The admin tools need the self-hosted server (web build only).":"Die Admin-Werkzeuge brauchen den eigenen Server (nur Web-Build).","Grip applies immediately. Car speed sits inside the physics module, which is built when a race starts, so it applies from the next race \u2014 Restart game applies it right now.":"Grip wirkt sofort. Das Tempo steckt im Physikmodul, das beim Rennstart gebaut wird, es greift also ab dem n\u00e4chsten Rennen \u2014 \u201eSpiel neu starten\u201c wendet es sofort an.","Replay this run with the settings it was driven with":"Diese Fahrt mit den damaligen Einstellungen abspielen"});
 Object.assign(DE,{"Autopilot":"Autopilot","Stop":"Stopp","Drive this run with autopilot":"Diese Fahrt mit Autopilot fahren","Autopilot armed \u2014 start the race on this track and the recorded inputs steer your car":"Autopilot bereit \u2014 starte das Rennen auf dieser Strecke, dann steuern die aufgezeichneten Eingaben dein Auto","Recording could not be loaded":"Aufzeichnung konnte nicht geladen werden","Autopilot off":"Autopilot aus"});
 
 // Stamp the settings a run was driven with into its leaderboard submission, so the
@@ -571,7 +571,7 @@ for(let i=0;i<rows.length;i++){
 }catch(e){}}
 setInterval(annotateLeaderboard,1200);
 
-function apiJson(path,opt){return fetch(APIBASE+"/v6/"+path,opt).then(r=>{if(!r.ok)throw new Error("http "+r.status);return r.json()})}
+function apiJson(path,opt){return fetch(APIBASE+"/v6/"+path,opt).then(r=>{if(!r.ok){const e=new Error("http "+r.status);e.status=r.status;throw e}return r.json()})}
 
 /* ---------- "Copy run" tab: put a leaderboard run on your own profile ---------- */
 // The tab lives inside the PolyMod panel (see addTab in buildUI). It reads the chosen run's
@@ -624,7 +624,7 @@ del.addEventListener("click",(async ev=>{ev.preventDefault(),ev.stopPropagation(
 if(del.disabled)return;
 del.disabled=!0,del.textContent="\u2026";
 try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,ids:[en.id]})});say(tr("Deleted."),!0);await paint()}
-catch(err){del.disabled=!1,del.textContent="\u00d7";say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+catch(err){del.disabled=!1,del.textContent="\u00d7";if(adminFail(err,say)){paint();return}say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
 top.appendChild(del)}
 row.appendChild(top);
 const badge=cheatBadgeText(en);
@@ -836,6 +836,13 @@ paint()}
 
 const ADMINKEY="ptAdmin";let adminToken="";try{adminToken=localStorage.getItem(ADMINKEY)||""}catch(e){}
 function saveAdmin(){try{localStorage.setItem(ADMINKEY,adminToken)}catch(e){}}
+// A saved session outlives its 12 h server lifetime (or a wiped server database) and the mod only
+// knows that some token exists, so it keeps offering admin actions. Each of them then fails with
+// 401 and nothing on screen says why. Drop the dead token, so the × buttons go away and the Admin
+// tab asks for the password again, and say what happened.
+let adminReset=null;
+function clearAdminSession(){adminToken="";saveAdmin();try{adminReset&&adminReset()}catch(e){}}
+function adminFail(err,say){if(!err||401!==err.status)return!1;clearAdminSession();say(tr("Session expired \u2014 sign in again in the Admin tab."),!0);return!0}
 function buildAdminTab(pane){
 if(!APIBASE){pane.appendChild(el("div","pt-hint","The admin tools need the self-hosted server (web build only)."));return}
 const status=el("div","pt-status",""),countEl=el("div","pt-count",""),listEl=el("div","pt-list","");
@@ -848,6 +855,7 @@ const outBtn=el("button","pt-wide pt-secondary","Sign out");outBtn.type="button"
 pane.appendChild(countEl);pane.appendChild(listEl);pane.appendChild(status);
 const say=(t,on)=>{status.textContent=t;status.classList.toggle("on",!!on)};
 if(adminToken){pw.placeholder=tr("Signed in.");pw.disabled=!0}
+adminReset=()=>{pw.value="",pw.placeholder=tr("Admin password"),pw.disabled=!1,applyBtn.textContent=tr("Apply");countEl.textContent="",listEl.textContent=""};
 async function refresh(){
   if(!adminToken)return;
   const q=curTrack.id?"&trackId="+encodeURIComponent(curTrack.id):"";
@@ -862,13 +870,14 @@ async function refresh(){
     const del=el("button","pt-play","\u2715");del.type="button";del.title=tr("Delete this record");
     del.addEventListener("click",(async ev=>{ev.preventDefault();
       try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,ids:[en.id]})});await refresh();say(tr("Deleted."),!0)}
-      catch(err){say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+      catch(err){adminFail(err,say)||say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
     top.appendChild(del);row.appendChild(top);
     const badge=cheatBadgeText(en);
     row.appendChild(el("div","pt-rmeta",trackLabel(en.trackId)+" \u00b7 "+(badge||tr("clean"))));
     listEl.appendChild(row)}
-  tabHooks.Admin=refresh;
+  tabHooks.Admin=refreshSafe;
 }
+const refreshSafe=()=>refresh().catch(err=>{adminFail(err,say)||say(tr("Admin request failed: ")+((err&&err.message)||err),!0)});
 applyBtn.addEventListener("click",(async e=>{e.preventDefault();
   try{
     if(!adminToken){
@@ -877,7 +886,7 @@ applyBtn.addEventListener("click",(async e=>{e.preventDefault();
       adminToken=r.token;saveAdmin();pw.value="";pw.disabled=!0;applyBtn.textContent=tr("Refresh");say(tr("Signed in."),!0);
     }
     await refresh();
-  }catch(err){adminToken="";saveAdmin();pw.disabled=!1;applyBtn.textContent=tr("Apply");say(tr("Admin request failed: ")+((err&&err.message)||err),!0)}}));
+  }catch(err){clearAdminSession();say(401===err.status?tr("Wrong password."):tr("Admin request failed: ")+((err&&err.message)||err),!0)}}));
 outBtn.addEventListener("click",(async e=>{e.preventDefault();
   try{await apiJson("admin/logout",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken})})}catch(err){}
   adminToken="";saveAdmin();pw.value="";pw.disabled=!1;applyBtn.textContent=tr("Apply");countEl.textContent="";listEl.textContent="";say("",!1)}));
@@ -886,8 +895,8 @@ allBtn.addEventListener("click",(async e=>{e.preventDefault();
   if(!curTrack.id)return say(tr("No records yet."),!0);
   if(!window.confirm(tr("Delete every record on this track?")))return;
   try{await apiJson("admin/delete",{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({token:adminToken,trackId:curTrack.id})});await refresh();say(tr("Deleted."),!0)}
-  catch(err){say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
-if(adminToken)refresh().catch(()=>{});
+  catch(err){adminFail(err,say)||say(tr("Delete failed: ")+((err&&err.message)||err),!0)}}));
+if(adminToken)refreshSafe();
 }
 
 function ptResumeWork(){playPendingReplay(),resumePendingAuto()}
