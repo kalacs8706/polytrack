@@ -45,6 +45,57 @@ function pruneHistory(){try{const all=listHistory();if(all.length<=160)return;al
 function archiveRecord(key,val){try{const m=RECORD_RE.exec(key);if(!m||!val)return;const old=localStorage.getItem(key);if(!old||old===val)return;let o=null;try{o=JSON.parse(old)}catch(e){return}if(!o||"string"!=typeof o.recording||!o.recording||"number"!=typeof o.frames)return;const id=m[4].toLowerCase(),at=Date.now();localStorage.setItem(HISTKEY+m[2]+"_"+m[3]+"_"+id+"_"+o.frames+"_"+at,JSON.stringify({slot:Number(m[2]),kind:m[3],prefix:m[1],id:id,frames:o.frames,recording:o.recording,at:at}));pruneHistory()}catch(e){}}
 (function(){try{const SP=Storage.prototype;if(SP.__ptRecHooked)return;SP.__ptRecHooked=1;const si=SP.setItem,gi=SP.getItem;SP.setItem=function(k,v){try{"string"==typeof k&&archiveRecord(k,v)}catch(e){}return si.call(this,k,v)};SP.getItem=function(k){const v=gi.call(this,k);try{if("string"==typeof k){const m=RECORD_RE.exec(k);if(m)setCurTrack(m[4])}}catch(e){}return v}}catch(e){}})();
 (function(){try{const byUrl={};for(const id in OFFICIAL)byUrl[OFFICIAL[id].url]=id;const mark=u=>{try{const raw=String(u),tq=/[?&]trackId=([0-9a-f]{64})/i.exec(raw);if(tq)return setCurTrack(tq[1]);const s=raw.split("?")[0].split("#")[0];if(byUrl[s])return setCurTrack(byUrl[s]);const m=/tracks\/[^?#]*?([0-9a-f]{64})\.track/i.exec(s);if(m)trackUrls[m[1].toLowerCase()]=raw,setCurTrack(m[1])}catch(e){}};const f=window.fetch;if(f&&!f.__ptHooked){const wf=function(i){try{mark("string"==typeof i?i:i&&i.url)}catch(e){}return f.apply(this,arguments)};wf.__ptHooked=1,window.fetch=wf}const op=XMLHttpRequest.prototype.open;if(op&&!op.__ptHooked){const wo=function(m,u){try{mark(u)}catch(e){}return op.apply(this,arguments)};wo.__ptHooked=1,XMLHttpRequest.prototype.open=wo}}catch(e){}})();
+/* ---------- the menu/loading wordmark becomes the mod's name ---------- */
+// The logo is one 1000x200 image, and the game fades its loading screen in once that image has
+// loaded, so the image stays in the page (invisible and empty) and the name is drawn in the
+// game's own font, ForcedSquare, in the same box and the logo's two blues.
+(function(){
+const CSS=".pt-logo{position:relative;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .25s ease-out}\n"+
+".pt-logo.pt-shown{opacity:1}\n"+
+".pt-logo>span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:ForcedSquare,Arial,sans-serif;font-size:clamp(46px,15.2vw,200px);line-height:1;letter-spacing:.01em;white-space:nowrap}\n"+
+".pt-logo>.pt-logo-stroke{color:#b3c1ff;-webkit-text-stroke:12px #b3c1ff}\n"+
+".pt-logo>.pt-logo-fill{color:#112052}";
+// At document_start there is no head to put a stylesheet in yet, so this runs when the logo
+// shows up (and again on DOMContentLoaded).
+function injectCss(){
+try{
+if(document.getElementById("pt-logo-css"))return;
+const s=document.createElement("style");
+s.id="pt-logo-css",s.textContent=CSS,(document.head||document.documentElement).appendChild(s)
+}catch(e){}}
+function make(img){
+if(!img||img.__ptLogo)return;
+injectCss();
+img.__ptLogo=1;
+const box=document.createElement("div");box.className="logo pt-logo";
+const stroke=document.createElement("span");stroke.className="pt-logo-stroke",stroke.textContent="PolyMod",stroke.setAttribute("aria-hidden","true");
+const fill=document.createElement("span");fill.className="pt-logo-fill",fill.textContent="PolyMod";
+box.appendChild(stroke),box.appendChild(fill);
+// Hidden rather than removed: the game's own load handler reveals the screen through it.
+try{img.style.display="none",img.style.position="absolute",img.style.width="0",img.style.height="0",img.setAttribute("aria-hidden","true")}catch(e){}
+try{img.parentNode.insertBefore(box,img.nextSibling)}catch(e){return}
+let ready=!1;
+const paint=()=>{try{box.classList.toggle("pt-shown",ready&&!img.classList.contains("hidden"))}catch(e){}};
+const loaded=()=>{ready=!0,paint()};
+try{if(document.fonts&&document.fonts.load)document.fonts.load("200px ForcedSquare").then(loaded,loaded);else loaded()}catch(e){loaded()}
+// The game fades the logo in and out by toggling the class on the image.
+try{new MutationObserver(paint).observe(img,{attributes:!0,attributeFilter:["class"]})}catch(e){}
+}
+// One document scan per burst of DOM changes: the game builds its menu in a single task, so
+// this costs nothing per added node.
+function fullScan(){
+try{const imgs=document.querySelectorAll('img[src*="logo.svg"]');for(let i=0;i<imgs.length;i++)make(imgs[i])}catch(e){}
+}
+let queued=0;
+function queue(){if(queued)return;queued=1,setTimeout((function(){queued=0,fullScan()}),0)}
+try{
+fullScan();
+// At document_start there is no documentElement yet, so the document itself is watched.
+new MutationObserver(queue).observe(document,{childList:!0,subtree:!0});
+"loading"===document.readyState&&document.addEventListener("DOMContentLoaded",(function(){injectCss(),fullScan()}),{once:!0})
+}catch(e){}
+})();
+
 window.__ptCamPatch="PolyMod UI + IJKL orbit + HUD/gfx/debug/AA + drag/resize";
 function saveCheat(){persist(CHEATKEY,cheat)}
 function syncCheat(){try{const w=window.__ptSimWorker;if(w)w.postMessage({ptCheat:cheatState()})}catch(e){}}
